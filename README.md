@@ -6,7 +6,7 @@ EZLynx remains the system for rating and policy records.
 ## What phase 1 includes
 
 - Sign in for each person. Agents see only their own contacts, owners see everyone.
-- Leads and a pipeline: Lead, Prospect, Quoting, Quoted, Lost. A contact becomes a Client when a bound policy is added and a Former client when the last policy ends.
+- Applicants: an agent enters an Applicant, can mark it Quoted or Lost. An applicant becomes a Client when the owner uploads the EZLynx new business report that lists their policy, and a Former client when the last policy ends.
 - Duplicate protection by phone and email across all agents.
 - The Rhino intake form on screen, saved per contact and produced as the branded one-page PDF.
 - Clients list with totals, renewals in the next 90 days, lost quotes with requote dates.

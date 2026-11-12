@@ -47,13 +47,13 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             <h2 className="h2">Stage</h2>
             <div className="card space-y-3">
               {isClient ? (
-                <p className="text-sm text-muted">This contact is a client because they have an active policy. They become a former client automatically when the last policy ends.</p>
+                <p className="text-sm text-muted">This contact is a client because a policy from the EZLynx report is on file. They become a former client automatically when the last policy ends.</p>
               ) : (
                 <ActionForm action={setStage} submit="Move" className="space-y-3">
                   <input type="hidden" name="contactId" value={c.id} />
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div><label className="label" htmlFor="stage">Move to</label>
-                      <select className="input" id="stage" name="stage" defaultValue={MANUAL_STAGES.includes(c.stage) ? c.stage : "QUOTING"}>
+                      <select className="input" id="stage" name="stage" defaultValue={MANUAL_STAGES.includes(c.stage) ? c.stage : "APPLICANT"}>
                         {MANUAL_STAGES.map((s) => <option key={s} value={s}>{stageLabel(s)}</option>)}
                       </select></div>
                     <div><label className="label" htmlFor="lostReason">If lost, why</label>
@@ -63,7 +63,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     <div><label className="label" htmlFor="requoteDate">Requote date</label>
                       <input className="input" id="requoteDate" name="requoteDate" type="date" defaultValue={c.requoteDate?.toISOString().slice(0, 10) ?? ""} /></div>
                   </div>
-                  {!c.intake && <p className="text-xs text-muted">Quoting opens once the intake form is filled.</p>}
+                  {!c.intake && <p className="text-xs text-muted">Fill the intake form before marking this applicant as quoted.</p>}
                 </ActionForm>
               )}
               {u.role === "ADMIN" && (
@@ -79,7 +79,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           <section className="space-y-2">
             <h2 className="h2">Policies</h2>
             <div className="card space-y-3">
-              {c.policies.length === 0 && <p className="text-sm text-muted">No policies yet. Adding a bound policy makes this contact a client.</p>}
+              {c.policies.length === 0 && <p className="text-sm text-muted">No policies yet. This applicant becomes a client when their policy shows up on the EZLynx new business report the owner uploads.</p>}
               {c.policies.map((p) => (
                 <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2 last:border-0 last:pb-0">
                   <div className="text-sm">
@@ -87,16 +87,16 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     <div className="text-muted">{fmtMoney(Number(p.premium))} · {fmtDate(p.effectiveDate)} to {fmtDate(p.expirationDate)}
                       {p.status === "ACTIVE" ? ` · renews in ${daysUntil(p.expirationDate)} days` : ` · ${p.status.toLowerCase()}`}</div>
                   </div>
-                  <ActionForm action={setPolicyStatus} submit="Set" className="flex items-center gap-2" buttonClass="btn-quiet">
+                  {u.role === "ADMIN" && <ActionForm action={setPolicyStatus} submit="Set" className="flex items-center gap-2" buttonClass="btn-quiet">
                     <input type="hidden" name="policyId" value={p.id} />
                     <select className="input" name="status" defaultValue={p.status} aria-label="Policy status">
                       <option value="ACTIVE">Active</option><option value="CANCELLED">Cancelled</option><option value="EXPIRED">Expired</option>
                     </select>
-                  </ActionForm>
+                  </ActionForm>}
                 </div>
               ))}
-              <details className="border-t border-line pt-3">
-                <summary className="cursor-pointer text-sm font-semibold">Add a bound policy</summary>
+              {u.role === "ADMIN" && <details className="border-t border-line pt-3">
+                <summary className="cursor-pointer text-sm font-semibold">Add a policy by hand (owner only)</summary>
                 <ActionForm action={addPolicy} submit="Add policy" className="mt-3 space-y-3">
                   <input type="hidden" name="contactId" value={c.id} />
                   <div className="grid gap-3 sm:grid-cols-3">
@@ -108,7 +108,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     <div><label className="label" htmlFor="expirationDate">Expires</label><input className="input" id="expirationDate" name="expirationDate" type="date" required /></div>
                   </div>
                 </ActionForm>
-              </details>
+              </details>}
             </div>
           </section>
           <section className="space-y-2">

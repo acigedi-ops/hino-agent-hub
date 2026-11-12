@@ -20,7 +20,7 @@ test("client status follows policies", () => {
   assert.equal(stageFromPolicies("QUOTED", 1, 1), "CLIENT");
   assert.equal(stageFromPolicies("CLIENT", 0, 2), "FORMER");
   assert.equal(stageFromPolicies("FORMER", 1, 3), "CLIENT");
-  assert.equal(stageFromPolicies("LEAD", 0, 0), "LEAD");
+  assert.equal(stageFromPolicies("APPLICANT", 0, 0), "APPLICANT");
 });
 
 test("dates", () => {
@@ -94,4 +94,25 @@ test("uploads are checked against their real file type", () => {
   assert.equal(sniffMatches("image/png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d])), true);
   assert.equal(sniffMatches("image/jpeg", bytes("%PDF-")), false);
   assert.equal(sniffMatches("text/html", bytes("<html>")), false);
+});
+
+test("EZLynx report rows are read from CSV", async () => {
+  const { parseReport, nameKey, parseUsDate } = await import("./ezlynx");
+  assert.equal(nameKey("SMITH, John A."), nameKey("john smith"));
+  assert.equal(parseUsDate("3/9/2026")?.toISOString().slice(0, 10), "2026-03-09");
+  assert.equal(parseUsDate("13/40/2026"), null);
+  const csv = [
+    "New Business Report,,,,,,",
+    'Insured Name,Policy #,Carrier,Written Premium,Eff Date,Term,Producer',
+    '"Doe, Jane",PA-100,Progressive,"$1,840.50",11/01/2026,6 months,Sam Agent',
+    "No Policy,,Geico,500,11/02/2026,12,Sam Agent",
+  ].join("\r\n");
+  const r = parseReport(csv);
+  assert.deepEqual(r.missing, []);
+  assert.equal(r.rows.length, 2);
+  assert.equal(r.rows[0].premium, 1840.5);
+  assert.equal(r.rows[0].expiration?.toISOString().slice(0, 10), "2027-05-01");
+  assert.equal(r.rows[0].expirationAssumed, true);
+  assert.deepEqual(r.rows[1].problems, ["no policy number"]);
+  assert.deepEqual(parseReport("a,b\n1,2").missing, ["Policy number"]);
 });

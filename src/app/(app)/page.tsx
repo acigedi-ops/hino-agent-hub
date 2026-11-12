@@ -25,10 +25,10 @@ export default async function Home() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="h1">Welcome, {u.name.split(" ")[0]}</h1>
-        <Link href="/contacts/new" className="btn-gold">+ New lead</Link>
+        <Link href="/contacts/new" className="btn-gold">+ New applicant</Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {STAGES.map((s) => (
           <Link key={s.key} href={s.key === "CLIENT" ? "/clients" : `/pipeline?stage=${s.key}`} className="card hover:border-gold-dark">
             <div className="text-2xl font-bold">{count(s.key)}</div>

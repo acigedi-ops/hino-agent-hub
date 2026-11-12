@@ -13,6 +13,7 @@
     "test": "tsx --test src/lib/*.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@prisma/client": "^6.19.3",
     "bcryptjs": "^3.0.3",
     "next": "15.5.29",

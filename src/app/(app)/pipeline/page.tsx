@@ -23,8 +23,8 @@ export default async function Pipeline({ searchParams }: { searchParams: Promise
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="h1">{only ? stageLabel(only) : "Pipeline"}</h1>
-        <Link href="/contacts/new" className="btn-gold">+ New lead</Link>
+        <h1 className="h1">{only ? stageLabel(only) : "Applicants"}</h1>
+        <Link href="/contacts/new" className="btn-gold">+ New applicant</Link>
       </div>
       <form className="flex flex-wrap gap-2">
         <input className="input max-w-xs" name="q" defaultValue={q} placeholder="Search name, phone or email" />
@@ -34,7 +34,7 @@ export default async function Pipeline({ searchParams }: { searchParams: Promise
         <Link className="btn-quiet" href="/pipeline?stage=LOST">Lost</Link>
         <Link className="btn-quiet" href="/pipeline?stage=FORMER">Former clients</Link>
       </form>
-      <div className={`grid gap-3 ${only ? "" : "md:grid-cols-2 xl:grid-cols-4"}`}>
+      <div className={`grid gap-3 ${only ? "" : "md:grid-cols-2"}`}>
         {columns.map((stage) => {
           const items = contacts.filter((c) => c.stage === stage);
           return (

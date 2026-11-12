@@ -13,9 +13,7 @@ enum Role {
 }
 
 enum Stage {
-  LEAD
-  PROSPECT
-  QUOTING
+  APPLICANT
   QUOTED
   CLIENT
   LOST
@@ -45,6 +43,7 @@ model User {
   contacts     Contact[]
   activities   Activity[]
   documents    Document[]
+  imports      ReportImport[]
 }
 
 model Session {
@@ -62,7 +61,7 @@ model Contact {
   id          String     @id @default(cuid())
   agentId     String
   agent       User       @relation(fields: [agentId], references: [id])
-  stage       Stage      @default(LEAD)
+  stage       Stage      @default(APPLICANT)
   type        QuoteType  @default(PERSONAL)
   fullName    String
   phone       String?
@@ -142,4 +141,18 @@ model Document {
   createdAt    DateTime @default(now())
 
   @@index([contactId, createdAt])
+}
+
+/// One upload of an EZLynx report by the owner.
+model ReportImport {
+  id           String   @id @default(cuid())
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  filename     String
+  rows         Int
+  converted    Int
+  created      Int
+  updated      Int
+  skipped      Int
+  createdAt    DateTime @default(now())
 }

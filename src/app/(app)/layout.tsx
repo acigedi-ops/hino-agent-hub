@@ -7,9 +7,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const u = await requireUser();
   const nav = [
     { href: "/", label: "Home" },
-    { href: "/pipeline", label: "Pipeline" },
+    { href: "/pipeline", label: "Applicants" },
     { href: "/clients", label: "Clients" },
-    ...(u.role === "ADMIN" ? [{ href: "/admin/agents", label: "Agents" }] : []),
+    ...(u.role === "ADMIN" ? [{ href: "/admin/import", label: "EZLynx report" }, { href: "/admin/agents", label: "Agents" }] : []),
     { href: "/account", label: "My account" },
   ];
   return (

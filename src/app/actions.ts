@@ -104,7 +104,7 @@ export async function createContact(_: FormState, f: FormData): Promise<FormStat
       priority: ["High", "Normal", "Low"].includes(s(f, "priority")) ? s(f, "priority") : null,
     },
   });
-  await log(c.id, u.id, "created", "Lead added");
+  await log(c.id, u.id, "created", "Applicant added");
   redirect(`/contacts/${c.id}`);
 }
 
@@ -114,8 +114,8 @@ export async function setStage(_: FormState, f: FormData): Promise<FormState> {
   const stage = s(f, "stage") as Stage;
   if (!MANUAL_STAGES.includes(stage)) return { error: "That stage is set automatically from policies." };
   if (c.stage === "CLIENT") return { error: "This contact has an active policy, so they stay a client." };
-  if ((stage === "QUOTING" || stage === "QUOTED") && !(await db.intake.findUnique({ where: { contactId: c.id } })))
-    return { error: "Fill the intake form before starting a quote." };
+  if (stage === "QUOTED" && !(await db.intake.findUnique({ where: { contactId: c.id } })))
+    return { error: "Fill the intake form before marking this applicant as quoted." };
 
   let lostReason: string | null = null;
   let requoteDate: Date | null = null;
@@ -181,7 +181,6 @@ export async function saveIntake(contactId: string, raw: unknown): Promise<FormS
         type: d.choice.type === "Commercial" ? "COMMERCIAL" : "PERSONAL",
         leadSource: d.text.lead_source || null,
         priority: d.choice.priority || null,
-        stage: c.stage === "LEAD" ? "PROSPECT" : c.stage,
       },
     }),
   ]);
@@ -210,8 +209,9 @@ export async function decodeVin(vin: string): Promise<{ year: string; make: stri
 
 // ---------- policies ----------
 
+/** Owner only. Agents do not bind policies in the hub: clients come from the EZLynx report upload. */
 export async function addPolicy(_: FormState, f: FormData): Promise<FormState> {
-  const u = await requireUser();
+  const u = await requireAdmin();
   const c = await ownedContact(u, s(f, "contactId"));
   const premium = Number(s(f, "premium").replace(/[$,]/g, ""));
   const effectiveDate = parseDate(s(f, "effectiveDate"));
@@ -233,7 +233,7 @@ export async function addPolicy(_: FormState, f: FormData): Promise<FormState> {
 }
 
 export async function setPolicyStatus(_: FormState, f: FormData): Promise<FormState> {
-  const u = await requireUser();
+  const u = await requireAdmin();
   const p = await db.policy.findFirst({ where: { id: s(f, "policyId"), contact: contactScope(u) } });
   const status = s(f, "status");
   if (!p || !["ACTIVE", "CANCELLED", "EXPIRED"].includes(status)) return { error: "Policy not found." };

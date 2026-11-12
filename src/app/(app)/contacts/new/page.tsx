@@ -9,9 +9,9 @@ export default async function NewContact() {
   const agents = u.role === "ADMIN" ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
   return (
     <div className="max-w-xl space-y-4">
-      <h1 className="h1">New lead</h1>
+      <h1 className="h1">New applicant</h1>
       <p className="text-sm text-muted">A name and a phone or email is enough. The hub checks whether this person is already with another agent.</p>
-      <ActionForm action={createContact} submit="Add lead" className="card space-y-3">
+      <ActionForm action={createContact} submit="Add applicant" className="card space-y-3">
         <div><label className="label" htmlFor="fullName">Full name or business</label><input className="input" id="fullName" name="fullName" required /></div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className="label" htmlFor="phone">Phone</label><input className="input" id="phone" name="phone" type="tel" /></div>

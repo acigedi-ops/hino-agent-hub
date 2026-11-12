@@ -6,7 +6,7 @@ import type { Stage } from "@prisma/client";
 import { db } from "@/lib/db";
 import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut, type SessionUser } from "@/lib/auth";
 import { MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
-import { createContactCore, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
+import { createContactCore, findReferrer, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
 import { lookupVin } from "@/lib/vin";
 import type { FormState } from "@/components/ActionForm";
 
@@ -65,7 +65,7 @@ export async function createContact(_: FormState, f: FormData): Promise<FormStat
   const u = await requireUser();
   const res = await createContactCore(u, {
     fullName: s(f, "fullName"), phone: s(f, "phone"), email: s(f, "email"), type: s(f, "type"),
-    leadSource: s(f, "leadSource"), priority: s(f, "priority"), agentId: s(f, "agentId"),
+    leadSource: s(f, "leadSource"), priority: s(f, "priority"), agentId: s(f, "agentId"), referralCode: s(f, "referralCode"),
   });
   if ("error" in res) return res;
   redirect(`/contacts/${res.contact.id}`);
@@ -112,6 +112,35 @@ export async function reassignContact(_: FormState, f: FormData): Promise<FormSt
   await log(c.id, u.id, "reassigned", `Reassigned to ${agent.name}`);
   revalidatePath("/", "layout");
   return { ok: `Now with ${agent.name}.` };
+}
+
+// ---------- referrals ----------
+
+/** Records who referred this contact, for when the code was not entered at the start. */
+export async function setReferrer(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const c = await ownedContact(u, s(f, "contactId"));
+  if (c.referredById) return { error: "A referrer is already recorded for this contact." };
+  const referrer = await findReferrer(s(f, "referralCode"));
+  if (!referrer) return { error: "No one in the hub has that referral code." };
+  if (referrer.id === c.id) return { error: "That is this person's own code." };
+  await db.contact.update({ where: { id: c.id }, data: { referredById: referrer.id, referredAt: new Date(), leadSource: c.leadSource ?? "Referral" } });
+  await log(c.id, u.id, "referral", `Referred by ${referrer.fullName}`);
+  await log(referrer.id, u.id, "referral", `Referred ${c.fullName}`);
+  revalidatePath(`/contacts/${c.id}`);
+  return { ok: `Referred by ${referrer.fullName}.` };
+}
+
+/** Owner only: marks whether the referrer's reward for this referral has been sent. */
+export async function setReferralRewarded(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireAdmin();
+  const c = await db.contact.findUnique({ where: { id: s(f, "contactId") }, include: { referredBy: { select: { id: true, fullName: true } } } });
+  if (!c?.referredBy) return { error: "Referral not found." };
+  const sent = s(f, "sent") === "true";
+  await db.contact.update({ where: { id: c.id }, data: { referralRewardedAt: sent ? new Date() : null } });
+  await log(c.referredBy.id, u.id, "referral", sent ? `Reward sent for referring ${c.fullName}` : `Reward for referring ${c.fullName} marked not sent`);
+  revalidatePath("/admin/referrals");
+  return {};
 }
 
 // ---------- intake ----------

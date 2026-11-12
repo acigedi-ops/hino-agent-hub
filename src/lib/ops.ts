@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { normalizeEmail, normalizePhone, parseDate, stageLabel } from "@/lib/contacts";
 import { intakeSchema, isValidVin, type IntakeData } from "@/lib/intake";
+import { cleanCode, newReferralCode } from "@/lib/referrals";
 import { DOC_KINDS, DOC_TYPES, MAX_DOC_BYTES, sniffMatches } from "@/lib/documents";
 
 /** The work behind the forms, shared with the assistant so both follow the same rules. */
@@ -18,7 +19,13 @@ export async function findDuplicate(phoneNorm: string | null, emailNorm: string 
   return db.contact.findFirst({ where: { OR: or, NOT: exceptId ? { id: exceptId } : undefined }, include: { agent: true } });
 }
 
-export type NewContact = { fullName: string; phone?: string; email?: string; type?: string; leadSource?: string; priority?: string; agentId?: string };
+export type NewContact = { fullName: string; phone?: string; email?: string; type?: string; leadSource?: string; priority?: string; agentId?: string; referralCode?: string };
+
+/** Finds whose referral code this is. Codes work across all agents, since a client may refer someone to a different agent. */
+export async function findReferrer(code: string) {
+  const c = cleanCode(code);
+  return c ? db.contact.findUnique({ where: { referralCode: c }, select: { id: true, fullName: true } }) : null;
+}
 
 export async function createContactCore(u: SessionUser, n: NewContact, opts: { allowNoPhoneOrEmail?: boolean } = {}): Promise<{ error: string } | { contact: Contact }> {
   const fullName = n.fullName.trim();
@@ -38,6 +45,9 @@ export async function createContactCore(u: SessionUser, n: NewContact, opts: { a
     };
   }
 
+  const referrer = n.referralCode?.trim() ? await findReferrer(n.referralCode) : null;
+  if (n.referralCode?.trim() && !referrer) return { error: "No one in the hub has that referral code. Check it with the person, or leave it empty." };
+
   let agentId = u.id;
   if (u.role === "ADMIN" && n.agentId) {
     const agent = await db.user.findFirst({ where: { id: n.agentId, active: true } });
@@ -48,11 +58,14 @@ export async function createContactCore(u: SessionUser, n: NewContact, opts: { a
     data: {
       agentId, fullName, phone: phone || null, phoneNorm, email: email || null, emailNorm,
       type: n.type === "COMMERCIAL" ? "COMMERCIAL" : "PERSONAL",
-      leadSource: n.leadSource || null,
+      leadSource: n.leadSource || (referrer ? "Referral" : null),
       priority: ["High", "Normal", "Low"].includes(n.priority ?? "") ? n.priority : null,
+      referralCode: newReferralCode(),
+      ...(referrer ? { referredById: referrer.id, referredAt: new Date() } : {}),
     },
   });
-  await logActivity(contact.id, u.id, "created", "Applicant added");
+  await logActivity(contact.id, u.id, "created", referrer ? `Applicant added. Referred by ${referrer.fullName}` : "Applicant added");
+  if (referrer) await logActivity(referrer.id, u.id, "referral", `Referred ${fullName}`);
   return { contact };
 }
 

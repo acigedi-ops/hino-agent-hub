@@ -116,3 +116,14 @@ test("EZLynx report rows are read from CSV", async () => {
   assert.deepEqual(r.rows[1].problems, ["no policy number"]);
   assert.deepEqual(parseReport("a,b\n1,2").missing, ["Policy number"]);
 });
+
+test("referral codes are read however they are typed", async () => {
+  const { cleanCode, newReferralCode, showCode } = await import("./referrals");
+  const code = newReferralCode();
+  assert.match(code, /^[A-HJKMNP-Z2-9]{7}$/);
+  assert.equal(cleanCode(showCode(code).toLowerCase()), code);
+  assert.equal(cleanCode(` rh ${code} `), code);
+  assert.equal(cleanCode(code), code);
+  assert.equal(cleanCode("RHABCDE"), "RHABCDE");
+  assert.equal(cleanCode("abc"), null);
+});

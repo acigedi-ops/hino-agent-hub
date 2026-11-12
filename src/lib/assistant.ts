@@ -30,6 +30,7 @@ const SYSTEM = `You are the assistant built into the Rhino Insurance agent hub, 
 How the hub works:
 - An agent enters a person as an Applicant, fills the one-page Rhino intake form (personal and commercial auto), then quotes them in EZLynx. The agent can mark an applicant Quoted, or Lost with a reason and an optional date to requote.
 - An applicant becomes a Client only when the owner uploads the EZLynx new business report that lists their policy. Agents and this assistant cannot make someone a client or add policies. A client with no active policy left becomes a Former client.
+- Every contact has a referral code (shown on their page, like RH-ABC2345) to share with family and friends. Entering that code when adding a new applicant records who referred them. The owner reviews referrals each month on the Referrals page and sends the referrer a gift card.
 - Each contact has a Documents section for licenses, registrations and other files, and a timeline of notes.
 - Pages: Home (/), Applicants (/pipeline), Clients (/clients, searchable and sortable), a contact (/contacts/ID), its intake form (/contacts/ID/intake) and the filled intake PDF (/contacts/ID/intake/pdf). The owner also has EZLynx report (/admin/import) and Agents (/admin/agents).
 - An agent sees only their own contacts. The owner sees everyone's. The tools already enforce this, so a contact you cannot find may belong to another agent.
@@ -147,13 +148,14 @@ function makeTools(u: SessionUser, uploads: Upload[]) {
         full_name: z.string().min(2).max(120), phone: opt, email: opt,
         type: z.enum(["PERSONAL", "COMMERCIAL"]),
         lead_source: opt.describe("For example Referral, Walk-in, Phone call, Website."),
+        referral_code: opt.describe("The referral code of the client who sent them, if the agent gave one. Looks like RH-ABC2345."),
       }),
       run: async (a) => {
         if (!a.phone && !a.email) {
           const same = await db.contact.findFirst({ where: { ...scope, fullName: { equals: a.full_name.trim(), mode: "insensitive" } }, select: { id: true, fullName: true, stage: true } });
           if (same) return `Not created. ${same.fullName} is already in the hub as ${stageLabel(same.stage)} with ID ${same.id}. Use that contact, or ask the agent if this is a different person.`;
         }
-        const res = await createContactCore(u, { fullName: a.full_name, phone: a.phone, email: a.email, type: a.type, leadSource: a.lead_source }, { allowNoPhoneOrEmail: true });
+        const res = await createContactCore(u, { fullName: a.full_name, phone: a.phone, email: a.email, type: a.type, leadSource: a.lead_source, referralCode: a.referral_code }, { allowNoPhoneOrEmail: true });
         return "error" in res ? `Not created. ${res.error}` : json({ created: true, id: res.contact.id, name: res.contact.fullName, stage: "Applicant" });
       },
     }),

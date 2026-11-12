@@ -80,7 +80,16 @@ model Contact {
   policies    Policy[]
   activities  Activity[]
   documents   Document[]
+  /// Code this person shares with friends and family. Entered when a new applicant is added.
+  referralCode       String?   @unique
+  referredById       String?
+  referredBy         Contact?  @relation("Referral", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals          Contact[] @relation("Referral")
+  referredAt         DateTime?
+  /// When the owner sent the referrer their reward for this referral.
+  referralRewardedAt DateTime?
 
+  @@index([referredAt])
   @@index([agentId, stage])
   @@index([phoneNorm])
   @@index([emailNorm])

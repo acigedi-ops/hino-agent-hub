@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { normalizeEmail, normalizePhone } from "@/lib/contacts";
+import { newReferralCode } from "@/lib/referrals";
 import { nameKey, parseReport, type ReportRow } from "@/lib/ezlynx";
 
 export type PlanRow = {
@@ -72,7 +73,7 @@ export async function runReport(u: SessionUser, text: string, apply: boolean, fi
       const c = await db.contact.create({
         data: {
           agentId: owner.id, fullName: r.name, stage: "CLIENT", phone: r.phone || null, phoneNorm, email: r.email || null, emailNorm,
-          type: /commercial|truck|cargo|liab/i.test(r.lob) ? "COMMERCIAL" : "PERSONAL", leadSource: "EZLynx report",
+          type: /commercial|truck|cargo|liab/i.test(r.lob) ? "COMMERCIAL" : "PERSONAL", leadSource: "EZLynx report", referralCode: newReferralCode(),
           policies: { create: policyData(r) },
           activities: { create: { userId: u.id, kind: "created", text: `Created from the EZLynx report with ${r.carrier} ${r.policyNumber}` } },
         },

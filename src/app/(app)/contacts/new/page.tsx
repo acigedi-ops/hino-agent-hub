@@ -25,6 +25,8 @@ export default async function NewContact() {
           <div><label className="label" htmlFor="priority">Priority</label>
             <select className="input" id="priority" name="priority" defaultValue="Normal"><option>High</option><option>Normal</option><option>Low</option></select></div>
         </div>
+        <div><label className="label" htmlFor="referralCode">Referral code (if a client sent them)</label>
+          <input className="input max-w-48 uppercase" id="referralCode" name="referralCode" placeholder="RH-" autoComplete="off" /></div>
         {u.role === "ADMIN" && (
           <div><label className="label" htmlFor="agentId">Agent</label>
             <select className="input" id="agentId" name="agentId" defaultValue={u.id}>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>

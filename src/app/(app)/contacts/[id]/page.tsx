@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
-import { addNote, addPolicy, deleteDocument, reassignContact, setPolicyStatus, setStage, uploadDocument } from "@/app/actions";
+import { addNote, addPolicy, deleteDocument, reassignContact, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
+import { showCode } from "@/lib/referrals";
 import { DOC_KINDS, fmtSize } from "@/lib/documents";
 import { ActionForm } from "@/components/ActionForm";
 import { StageBadge } from "@/components/StageBadge";
@@ -15,6 +16,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     where: { id, ...contactScope(u) },
     include: {
       agent: true, intake: { select: { updatedAt: true } },
+      referredBy: { select: { id: true, fullName: true, agentId: true } },
+      referrals: { select: { id: true, fullName: true, stage: true, agentId: true, referredAt: true, referralRewardedAt: true }, orderBy: { referredAt: "desc" } },
       policies: { orderBy: { expirationDate: "asc" } },
       documents: { orderBy: { createdAt: "desc" }, select: { id: true, kind: true, filename: true, size: true, createdAt: true, uploadedBy: { select: { name: true } } } },
       activities: { orderBy: { createdAt: "desc" }, take: 100, include: { user: true } },
@@ -23,6 +26,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   if (!c) notFound();
   const agents = u.role === "ADMIN" ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
   const isClient = c.stage === "CLIENT";
+  /** Referrals cross agents, so only link to a contact this person is allowed to open. */
+  const see = (agentId: string) => u.role === "ADMIN" || agentId === u.id;
 
   return (
     <div className="space-y-6">
@@ -109,6 +114,43 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   </div>
                 </ActionForm>
               </details>}
+            </div>
+          </section>
+          <section className="space-y-2">
+            <h2 className="h2">Referrals</h2>
+            <div className="card space-y-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-muted">Their referral code</div>
+                  <div className="select-all text-xl font-bold tracking-wider">{c.referralCode ? showCode(c.referralCode) : "None yet"}</div>
+                </div>
+                <p className="max-w-xs text-xs text-muted">Give this code to {c.fullName.split(" ")[0]} to share with family and friends. Enter it when you add the person they send.</p>
+              </div>
+              {c.referredBy ? (
+                <p className="border-t border-line pt-3">Referred by{" "}
+                  {see(c.referredBy.agentId) ? <Link className="font-semibold underline" href={`/contacts/${c.referredBy.id}`}>{c.referredBy.fullName}</Link> : <span className="font-semibold">{c.referredBy.fullName}</span>}
+                  {c.referredAt ? ` on ${fmtDate(c.referredAt)}` : ""}.</p>
+              ) : (
+                <ActionForm action={setReferrer} submit="Save" className="flex flex-wrap items-end gap-2 border-t border-line pt-3" buttonClass="btn-quiet">
+                  <input type="hidden" name="contactId" value={c.id} />
+                  <div><label className="label" htmlFor="referralCode">Referred by (code)</label>
+                    <input className="input max-w-40 uppercase" id="referralCode" name="referralCode" placeholder="RH-" autoComplete="off" required /></div>
+                </ActionForm>
+              )}
+              {c.referrals.length > 0 && (
+                <div className="border-t border-line pt-3">
+                  <div className="mb-1 font-semibold">People {c.fullName.split(" ")[0]} referred ({c.referrals.length})</div>
+                  <ul className="space-y-1">
+                    {c.referrals.map((r) => (
+                      <li key={r.id} className="flex flex-wrap items-center gap-2">
+                        {see(r.agentId) ? <Link className="underline" href={`/contacts/${r.id}`}>{r.fullName}</Link> : <span>{r.fullName}</span>}
+                        <StageBadge stage={r.stage} />
+                        <span className="text-xs text-muted">{fmtDate(r.referredAt)}{r.referralRewardedAt ? ` · reward sent ${fmtDate(r.referralRewardedAt)}` : ""}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           </section>
           <section className="space-y-2">

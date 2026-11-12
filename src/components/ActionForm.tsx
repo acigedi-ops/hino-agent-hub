@@ -1,5 +1,5 @@
 "use client";
-import { useActionState } from "react";
+import { startTransition, useActionState } from "react";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -15,7 +15,8 @@ export function ActionForm({
 }) {
   const [state, run, pending] = useActionState(action, {});
   return (
-    <form action={run} className={className}>
+    // Submitting by hand instead of through `action` keeps what was typed when the action returns an error.
+    <form action={run} onSubmit={(e) => { e.preventDefault(); const data = new FormData(e.currentTarget); startTransition(() => run(data)); }} className={className}>
       {children}
       {state.error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</p>}
       {state.ok && <p role="status" className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{state.ok}</p>}

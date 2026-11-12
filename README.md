@@ -6,6 +6,9 @@ EZLynx remains the system for rating and policy records.
 ## What phase 1 includes
 
 - Sign in for each person. Agents see only their own contacts, owners see everyone.
+- Home page assistant (needs `ANTHROPIC_API_KEY`): finds contacts, answers questions, adds applicants, reads uploaded licenses and registrations into the intake form and files them under Documents.
+- EZLynx report upload (owner): a new business report saved as CSV turns matching applicants into clients.
+- Referral codes: every contact has a code; entering it on a new applicant records who referred them, and the owner tracks $20 rewards by month.
 - Applicants: an agent enters an Applicant, can mark it Quoted or Lost. An applicant becomes a Client when the owner uploads the EZLynx new business report that lists their policy, and a Former client when the last policy ends.
 - Duplicate protection by phone and email across all agents.
 - The Rhino intake form on screen, saved per contact and produced as the branded one-page PDF.

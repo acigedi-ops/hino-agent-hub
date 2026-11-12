@@ -5,9 +5,9 @@ import { headers } from "next/headers";
 import type { Stage } from "@prisma/client";
 import { db } from "@/lib/db";
 import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut, type SessionUser } from "@/lib/auth";
-import { MANUAL_STAGES, normalizeEmail, normalizePhone, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
-import { intakeSchema, isValidVin } from "@/lib/intake";
-import { DOC_KINDS, DOC_TYPES, MAX_DOC_BYTES, sniffMatches } from "@/lib/documents";
+import { MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
+import { createContactCore, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
+import { lookupVin } from "@/lib/vin";
 import type { FormState } from "@/components/ActionForm";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -46,15 +46,7 @@ async function ownedContact(u: SessionUser, id: string) {
   return c;
 }
 
-const log = (contactId: string, userId: string, kind: string, text: string) =>
-  db.activity.create({ data: { contactId, userId, kind, text } });
-
-/** Finds an existing contact with the same phone or email, across all agents. */
-async function findDuplicate(phoneNorm: string | null, emailNorm: string | null, exceptId?: string) {
-  const or = [phoneNorm && { phoneNorm }, emailNorm && { emailNorm }].filter(Boolean) as object[];
-  if (!or.length) return null;
-  return db.contact.findFirst({ where: { OR: or, NOT: exceptId ? { id: exceptId } : undefined }, include: { agent: true } });
-}
+const log = logActivity;
 
 async function syncStage(contactId: string) {
   const [c, active, total] = await Promise.all([
@@ -71,41 +63,12 @@ async function syncStage(contactId: string) {
 
 export async function createContact(_: FormState, f: FormData): Promise<FormState> {
   const u = await requireUser();
-  const fullName = s(f, "fullName");
-  const phone = s(f, "phone");
-  const email = s(f, "email");
-  if (fullName.length < 2) return { error: "Enter the person's or business's name." };
-  const phoneNorm = normalizePhone(phone);
-  const emailNorm = normalizeEmail(email);
-  if (!phoneNorm && !emailNorm) return { error: "Enter a valid phone number or email so the hub can spot duplicates." };
-
-  const dup = await findDuplicate(phoneNorm, emailNorm);
-  if (dup) {
-    return {
-      error: dup.agentId === u.id || u.role === "ADMIN"
-        ? `${dup.fullName} is already in the hub (${stageLabel(dup.stage)}, agent ${dup.agent.name}).`
-        : `This person is already in the hub with ${dup.agent.name}. Message them or ask the owner before quoting.`,
-    };
-  }
-
-  let agentId = u.id;
-  const wanted = s(f, "agentId");
-  if (u.role === "ADMIN" && wanted) {
-    const agent = await db.user.findFirst({ where: { id: wanted, active: true } });
-    if (!agent) return { error: "Pick an active agent." };
-    agentId = agent.id;
-  }
-
-  const c = await db.contact.create({
-    data: {
-      agentId, fullName, phone: phone || null, phoneNorm, email: email || null, emailNorm,
-      type: s(f, "type") === "COMMERCIAL" ? "COMMERCIAL" : "PERSONAL",
-      leadSource: s(f, "leadSource") || null,
-      priority: ["High", "Normal", "Low"].includes(s(f, "priority")) ? s(f, "priority") : null,
-    },
+  const res = await createContactCore(u, {
+    fullName: s(f, "fullName"), phone: s(f, "phone"), email: s(f, "email"), type: s(f, "type"),
+    leadSource: s(f, "leadSource"), priority: s(f, "priority"), agentId: s(f, "agentId"),
   });
-  await log(c.id, u.id, "created", "Applicant added");
-  redirect(`/contacts/${c.id}`);
+  if ("error" in res) return res;
+  redirect(`/contacts/${res.contact.id}`);
 }
 
 export async function setStage(_: FormState, f: FormData): Promise<FormState> {
@@ -155,56 +118,16 @@ export async function reassignContact(_: FormState, f: FormData): Promise<FormSt
 
 export async function saveIntake(contactId: string, raw: unknown): Promise<FormState> {
   const u = await requireUser();
-  const c = await ownedContact(u, contactId);
-  const parsed = intakeSchema.safeParse(raw);
-  if (!parsed.success) return { error: "Some fields are too long or invalid. Check the form and try again." };
-  const d = parsed.data;
-  if (d.text.full_name.length < 2) return { error: "Enter the applicant's full name." };
-  const badVin = d.vehicles.find((v) => v.vin && !isValidVin(v.vin));
-  if (badVin) return { error: `VIN ${badVin.vin} is not valid. A VIN has 17 characters and never uses I, O or Q.` };
-
-  const phoneNorm = normalizePhone(d.text.phone1);
-  const emailNorm = normalizeEmail(d.text.email);
-  const dup = await findDuplicate(phoneNorm, emailNorm, c.id);
-  if (dup) return { error: `That phone or email already belongs to ${dup.fullName} (agent ${dup.agent.name}).` };
-
-  await db.$transaction([
-    db.intake.upsert({ where: { contactId: c.id }, create: { contactId: c.id, data: d }, update: { data: d } }),
-    db.contact.update({
-      where: { id: c.id },
-      data: {
-        fullName: d.text.full_name,
-        phone: d.text.phone1 || null, phoneNorm,
-        email: d.text.email || null, emailNorm,
-        dob: parseDate(d.text.dob),
-        address: [d.text.address1, d.text.address2].filter(Boolean).join(", ") || null,
-        type: d.choice.type === "Commercial" ? "COMMERCIAL" : "PERSONAL",
-        leadSource: d.text.lead_source || null,
-        priority: d.choice.priority || null,
-      },
-    }),
-  ]);
-  await log(c.id, u.id, "intake", "Intake form saved");
+  const res = await saveIntakeCore(u, await ownedContact(u, contactId), raw);
+  if ("error" in res) return res;
   revalidatePath("/", "layout");
   return { ok: "Intake saved." };
 }
 
 /** Looks up year, make and model for a VIN in the public NHTSA database. Returns null if it cannot be decoded. */
-export async function decodeVin(vin: string): Promise<{ year: string; make: string; model: string } | null> {
+export async function decodeVin(vin: string) {
   await requireUser();
-  if (!isValidVin(vin)) return null;
-  try {
-    const res = await fetch(
-      `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${encodeURIComponent(vin.trim().toUpperCase())}?format=json`,
-      { signal: AbortSignal.timeout(6000) },
-    );
-    if (!res.ok) return null;
-    const r = (await res.json())?.Results?.[0];
-    if (!r?.Make) return null;
-    return { year: String(r.ModelYear ?? ""), make: String(r.Make ?? ""), model: String(r.Model ?? "") };
-  } catch {
-    return null;
-  }
+  return lookupVin(vin);
 }
 
 // ---------- policies ----------
@@ -251,16 +174,12 @@ export async function uploadDocument(_: FormState, f: FormData): Promise<FormSta
   const c = await ownedContact(u, s(f, "contactId"));
   const file = f.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file first." };
-  if (file.size > MAX_DOC_BYTES) return { error: "That file is over 10 MB. Take a smaller photo or compress the PDF." };
-  if (!DOC_TYPES[file.type]) return { error: "Only PDF, JPEG, PNG, WebP and HEIC files are accepted." };
-  const data = new Uint8Array(await file.arrayBuffer());
-  if (!sniffMatches(file.type, data)) return { error: "That file does not look like a real PDF or image. Export it again and retry." };
-  const kind = DOC_KINDS.includes(s(f, "kind")) ? s(f, "kind") : "Other";
-  const filename = file.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 120) || "document";
-  await db.document.create({ data: { contactId: c.id, uploadedById: u.id, kind, filename, mimeType: file.type, size: file.size, data } });
-  await log(c.id, u.id, "document", `Document added: ${kind} (${filename})`);
+  const upload = { name: file.name, type: file.type, data: new Uint8Array(await file.arrayBuffer()) };
+  const problem = uploadProblem(upload);
+  if (problem) return { error: problem };
+  const doc = await saveDocumentCore(u, c.id, upload, s(f, "kind"));
   revalidatePath(`/contacts/${c.id}`);
-  return { ok: `${kind} saved to this contact.` };
+  return { ok: `${doc.kind} saved to this contact.` };
 }
 
 export async function deleteDocument(_: FormState, f: FormData): Promise<FormState> {

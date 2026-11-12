@@ -2,6 +2,8 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { STAGES, daysUntil, fmtDate, fmtMoney } from "@/lib/contacts";
+import { assistantEnabled } from "@/lib/assistant";
+import { AssistantBox } from "@/components/AssistantBox";
 
 export default async function Home() {
   const u = await requireUser();
@@ -27,6 +29,8 @@ export default async function Home() {
         <h1 className="h1">Welcome, {u.name.split(" ")[0]}</h1>
         <Link href="/contacts/new" className="btn-gold">+ New applicant</Link>
       </div>
+
+      <AssistantBox enabled={assistantEnabled()} firstName={u.name.split(" ")[0]} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {STAGES.map((s) => (

@@ -27,3 +27,6 @@ services:
         sync: false
       - key: SEED_ADMIN_PASSWORD
         sync: false
+      # Claude API key for the home page assistant. Set it in the Render dashboard, never in this file.
+      - key: ANTHROPIC_API_KEY
+        sync: false

@@ -30,3 +30,6 @@ services:
       # Claude API key for the home page assistant. Set it in the Render dashboard, never in this file.
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Optional key for the assistant's own owner-level sign-in. Set it in the Render dashboard, never in this file.
+      - key: HUB_ADMIN_KEY
+        sync: false

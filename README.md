@@ -48,3 +48,13 @@ Its field names must match `src/lib/intake.ts`; `npm test` fails if they drift a
 - Every data query is scoped to the signed-in user in `src/lib/auth.ts` (`contactScope`).
 - The intake form deliberately has no fields for card or bank account numbers.
 - Never commit `.env` or real client data.
+
+## Assistant access
+
+Setting `HUB_ADMIN_KEY` (24+ characters) lets an outside assistant sign in as its own owner-level account, "Claude (assistant)":
+
+```
+curl -c jar -X POST -H "Authorization: Bearer $RHINO_HUB_KEY" https://<host>/api/service-login
+```
+
+The session lasts two hours and uses the normal pages, so everything it does is logged under that name. Without the variable the endpoint always refuses.

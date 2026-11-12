@@ -1,7 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { createHash, randomBytes } from "crypto";
+import { createHash, randomBytes, timingSafeEqual } from "crypto";
 import bcrypt from "bcryptjs";
 import { cache } from "react";
 import { db } from "./db";
@@ -64,3 +64,29 @@ export async function requireAdmin(): Promise<SessionUser> {
 
 /** Prisma filter limiting contacts to what this user may see: agents see their own, the owner sees all. */
 export const contactScope = (u: SessionUser) => (u.role === "ADMIN" ? {} : { agentId: u.id });
+
+const SERVICE_EMAIL = "assistant@rhino.hub";
+const SERVICE_HOURS = 2;
+
+/**
+ * Signs in the assistant's own owner-level account using the key in HUB_ADMIN_KEY, so changes made on the
+ * owner's behalf from outside the hub are done through the normal pages and logged under a separate name.
+ * Off unless the key is set and at least 24 characters. The account has no usable password.
+ */
+export async function serviceSignIn(key: string): Promise<boolean> {
+  const expected = process.env.HUB_ADMIN_KEY ?? "";
+  if (expected.length < 24) return false;
+  const a = createHash("sha256").update(key).digest(), b = createHash("sha256").update(expected).digest();
+  if (!timingSafeEqual(a, b)) return false;
+  const user = await db.user.upsert({
+    where: { email: SERVICE_EMAIL },
+    update: {},
+    create: { email: SERVICE_EMAIL, name: "Claude (assistant)", role: "ADMIN", passwordHash: await bcrypt.hash(randomBytes(32).toString("hex"), 12) },
+  });
+  if (!user.active) return false;
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + SERVICE_HOURS * 36e5);
+  await db.session.create({ data: { tokenHash: hashToken(token), userId: user.id, expiresAt } });
+  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", expires: expiresAt });
+  return true;
+}

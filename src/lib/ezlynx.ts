@@ -16,6 +16,10 @@ export type ReportRow = {
   /** True when the report had no expiration date and one was worked out from the term. */
   expirationAssumed: boolean;
   agent: string;
+  address: string;
+  /** What the row reports. Carrier activity reports list cancellations and reinstatements next to new business. */
+  transaction: "new" | "renewal" | "cancel" | "cancel_notice" | "reinstate";
+  processed: Date | null;
   problems: string[];
 };
 
@@ -26,20 +30,28 @@ const HEADINGS = {
   policyNumber: ["policy number", "policy", "policy no", "policy num", "policy id"],
   carrier: ["carrier", "carrier name", "company", "writing company", "insurance company", "insurer"],
   premium: ["premium", "written premium", "total premium", "annual premium", "annualized premium", "policy premium", "premium fees", "premium and fees"],
-  effective: ["effective date", "eff date", "effective", "policy effective date", "policy eff date"],
-  expiration: ["expiration date", "exp date", "expiration", "policy expiration date", "policy exp date", "expires"],
+  effective: ["policy term start date", "term start date", "effective date", "eff date", "effective", "policy effective date", "policy eff date"],
+  expiration: ["policy term end date", "term end date", "expiration date", "exp date", "expiration", "policy expiration date", "policy exp date", "expires"],
   term: ["term", "policy term", "term months"],
   lob: ["line of business", "lob", "policy type", "line", "product", "coverage type"],
   agent: ["producer", "producer name", "agent", "agent name", "assigned agent", "assigned to"],
-  phone: ["phone", "phone number", "home phone", "cell phone", "mobile phone", "primary phone"],
+  phone: ["phone", "phone 1", "phone number", "home phone", "cell phone", "mobile phone", "primary phone"],
   email: ["email", "email address", "primary email"],
+  street: ["street", "address", "address 1", "mailing address", "street address"],
+  street2: ["street 2", "address 2", "apt", "unit"],
+  city: ["city", "mailing city"],
+  state: ["mailing state", "state"],
+  zip: ["zip", "zip code", "postal code", "mailing zip"],
+  transaction: ["transaction", "transaction type", "activity", "activity type"],
+  processed: ["processed", "processed date", "transaction date", "entered date"],
 } as const;
 type Field = keyof typeof HEADINGS;
 
 export const FIELD_LABELS: Record<Field, string> = {
   name: "Client name", first: "First name", last: "Last name", policyNumber: "Policy number", carrier: "Carrier",
   premium: "Premium", effective: "Effective date", expiration: "Expiration date", term: "Term", lob: "Line of business",
-  agent: "Agent", phone: "Phone", email: "Email",
+  agent: "Agent", phone: "Phone", email: "Email", street: "Street", street2: "Street 2", city: "City", state: "State", zip: "Zip",
+  transaction: "Transaction", processed: "Processed date",
 };
 
 /** Splits CSV text into rows of cells. Handles quoted cells, doubled quotes and line breaks inside quotes. */
@@ -98,7 +110,7 @@ export type ParsedReport = { found: string[]; missing: string[]; rows: ReportRow
 export type ReportOptions = { carrier?: string; termMonths?: number };
 
 /** Carrier reports use short product codes. */
-const PRODUCTS: Record<string, string> = { ppa: "Personal auto", cv: "Commercial auto", ho: "Home", rv: "RV", mc: "Motorcycle", ren: "Renters" };
+const PRODUCTS: Record<string, string> = { auto: "Personal auto", "commercial auto": "Commercial auto", ppa: "Personal auto", cv: "Commercial auto", ho: "Home", rv: "RV", mc: "Motorcycle", ren: "Renters" };
 
 /** "2037751653 - 00" and "2037751653-01" are the same policy in different terms. */
 export const policyBase = (v: string) => v.trim().replace(/\s*-\s*\d{1,2}$/, "");
@@ -110,7 +122,8 @@ export function parseReport(input: string | string[][], opts: ReportOptions = {}
   if (headAt < 0) return { found: [], missing: ["Policy number"], rows: [] };
   const head = cells[headAt].map(norm);
   const col = {} as Record<Field, number>;
-  for (const f of Object.keys(HEADINGS) as Field[]) col[f] = head.findIndex((h) => (HEADINGS[f] as readonly string[]).includes(h));
+  // Headings are tried in the order listed, so "Policy Term Start Date" wins over a plain "Effective" column, which on a cancellation row is the cancel date.
+  for (const f of Object.keys(HEADINGS) as Field[]) col[f] = HEADINGS[f].map((h) => head.indexOf(h)).find((i) => i >= 0) ?? -1;
   const has = (f: Field) => col[f] >= 0;
   const missing: string[] = [];
   if (!has("name") && !(has("first") && has("last"))) missing.push("Client name");
@@ -130,17 +143,24 @@ export function parseReport(input: string | string[][], opts: ReportOptions = {}
       expirationAssumed = true;
     }
     const premium = parseMoney(get("premium"));
+    const t = get("transaction").toLowerCase();
+    const transaction: ReportRow["transaction"] =
+      /cancel sent|pending|notice|intent/.test(t) ? "cancel_notice" : /cancel|lapse|non.?renew/.test(t) ? "cancel" : /reinstat/.test(t) ? "reinstate" : /renew/.test(t) ? "renewal" : "new";
+    const writes = transaction === "new" || transaction === "renewal";
+    const address = [get("street"), get("street2"), [get("city"), [get("state"), get("zip")].filter(Boolean).join(" ")].filter(Boolean).join(", ")].filter(Boolean).join(", ");
     const problems: string[] = [];
     if (nameKey(name).length < 2) problems.push("no client name");
     if (!get("policyNumber")) problems.push("no policy number");
-    if (!effective) problems.push("no effective date");
-    if (premium === null || premium <= 0) problems.push("no premium");
+    if (writes && !effective) problems.push("no effective date");
+    if (writes && (premium === null || premium <= 0)) problems.push("no premium");
     if (effective && expiration && expiration <= effective) problems.push("expiration is before the effective date");
     return {
       line: headAt + i + 2, name, phone: get("phone"), email: get("email"), carrier: get("carrier") || opts.carrier?.trim() || "Unknown carrier",
       policyNumber: policyBase(get("policyNumber")), lob: PRODUCTS[get("lob").toLowerCase()] ?? (get("lob") || "Other"), premium, effective, expiration, expirationAssumed,
-      agent: get("agent"), problems,
+      agent: get("agent"), address, transaction, processed: parseUsDate(get("processed")), problems,
     };
   }).filter((r) => r.name || r.policyNumber);
+  // Oldest first, so a policy is added before the same file cancels it.
+  rows.sort((a, b) => (a.processed?.getTime() ?? 0) - (b.processed?.getTime() ?? 0));
   return { found: (Object.keys(HEADINGS) as Field[]).filter(has).map((f) => FIELD_LABELS[f]), missing, rows };
 }

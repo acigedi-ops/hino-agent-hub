@@ -123,6 +123,19 @@ test("EZLynx report rows are read from CSV", async () => {
   assert.equal(parseReport(carrierRows).missing.length, 1);
   const c = parseReport(carrierRows, { carrier: "National General", termMonths: 6 }).rows[0];
   assert.deepEqual([c.policyNumber, c.carrier, c.lob, c.premium, c.expiration?.toISOString().slice(0, 10)], ["1234567890", "National General", "Personal auto", 1250.4, "2027-05-05"]);
+  // Activity report layout: cancellations listed before the new business they cancel, term dates, two-digit years.
+  const activity = [
+    "Insured Name,Street,City,Mailing State,Zip,Phone 1,Policy Number,Product,Producer,Transaction,Processed,Effective,Policy Term Start Date,Policy Term End Date,Premium",
+    '"Doe, Sam",1 Test St,Tacoma,WA,98000,O: (253) 555-0100,0099-0,Commercial Auto,,Final cancel,10/05/26,09/30/26,09/26/26,09/26/27,',
+    '"Doe, Sam",1 Test St,Tacoma,WA,98000,O: (253) 555-0100,0099,Commercial Auto,,Cancel sent,10/01/26,10/04/26,09/26/26,09/26/27,',
+    '"Doe, Sam",1 Test St,Tacoma,WA,98000,O: (253) 555-0100,0099,Commercial Auto,,New business,09/28/26,09/26/26,09/26/26,09/26/27,$8657.00',
+  ].join("\n");
+  const a = parseReport(activity, { carrier: "Progressive" }).rows;
+  assert.deepEqual(a.map((x) => x.transaction), ["new", "cancel_notice", "cancel"]);
+  assert.deepEqual(a.map((x) => x.policyNumber), ["0099", "0099", "0099"]);
+  assert.deepEqual(a.map((x) => x.problems.length), [0, 0, 0]);
+  assert.deepEqual([a[0].address, a[0].expiration?.toISOString().slice(0, 10), a[0].expirationAssumed], ["1 Test St, Tacoma, WA 98000", "2027-09-26", false]);
+  assert.equal(a[0].phone, "O: (253) 555-0100");
 });
 
 test("referral codes are read however they are typed", async () => {

@@ -5,10 +5,10 @@ import type { Plan, PlanRow } from "@/lib/report-import";
 import { applyReport, previewReport } from "./actions";
 
 const LABEL: Record<PlanRow["action"], string> = {
-  convert: "Applicant to client", add: "New policy", update: "Already in hub", create: "New client", skip: "Skipped",
+  convert: "Applicant to client", add: "New policy", update: "Updated", cancel: "Cancelled", create: "New client", skip: "Skipped",
 };
 const TONE: Record<PlanRow["action"], string> = {
-  convert: "bg-green-50 text-green-800", add: "bg-green-50 text-green-800", update: "bg-stone-100 text-stone-700",
+  convert: "bg-green-50 text-green-800", add: "bg-green-50 text-green-800", update: "bg-stone-100 text-stone-700", cancel: "bg-red-50 text-red-800",
   create: "bg-amber-50 text-amber-800", skip: "bg-red-50 text-red-800",
 };
 const money = (n: number | null) => (n === null ? "" : n.toLocaleString("en-US", { style: "currency", currency: "USD" }));
@@ -16,7 +16,7 @@ const money = (n: number | null) => (n === null ? "" : n.toLocaleString("en-US",
 export function ImportForm({ agents, me }: { agents: { id: string; name: string }[]; me: string }) {
   const [file, setFile] = useState<File | null>(null);
   const [carrier, setCarrier] = useState("");
-  const [term, setTerm] = useState("12");
+  const [term, setTerm] = useState("6");
   const [agentId, setAgentId] = useState(me);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [done, setDone] = useState(false);
@@ -38,7 +38,7 @@ export function ImportForm({ agents, me }: { agents: { id: string; name: string 
     if ("error" in res) setError(res.error); else { setPlan(res); setDone(true); }
   });
 
-  const changes = plan ? plan.counts.convert + plan.counts.add + plan.counts.update + plan.counts.create : 0;
+  const changes = plan ? plan.counts.convert + plan.counts.add + plan.counts.update + plan.counts.cancel + plan.counts.create : 0;
   return (
     <div className="space-y-4">
       <div className="card space-y-3">
@@ -66,7 +66,7 @@ export function ImportForm({ agents, me }: { agents: { id: string; name: string 
       )}
       {plan && plan.missing.length === 0 && (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
             {(Object.keys(LABEL) as PlanRow["action"][]).map((k) => (
               <div key={k} className="card"><div className="text-xl font-bold">{plan.counts[k]}</div><div className="text-xs font-semibold uppercase tracking-wide text-muted">{LABEL[k]}</div></div>
             ))}

@@ -1,5 +1,5 @@
 /**
- * Reads a report exported from EZLynx (saved as CSV) into policy rows.
+ * Reads a new business report (from EZLynx or straight from a carrier such as National General) into policy rows.
  * Column names vary between reports, so each field accepts several headings.
  */
 export type ReportRow = {
@@ -25,7 +25,7 @@ const HEADINGS = {
   last: ["last name", "applicant last name", "insured last name"],
   policyNumber: ["policy number", "policy", "policy no", "policy num", "policy id"],
   carrier: ["carrier", "carrier name", "company", "writing company", "insurance company", "insurer"],
-  premium: ["premium", "written premium", "total premium", "annual premium", "annualized premium", "policy premium"],
+  premium: ["premium", "written premium", "total premium", "annual premium", "annualized premium", "policy premium", "premium fees", "premium and fees"],
   effective: ["effective date", "eff date", "effective", "policy effective date", "policy eff date"],
   expiration: ["expiration date", "exp date", "expiration", "policy expiration date", "policy exp date", "expires"],
   term: ["term", "policy term", "term months"],
@@ -94,9 +94,17 @@ export function parseMoney(v: string): number | null {
 const addMonths = (d: Date, months: number) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, d.getUTCDate()));
 
 export type ParsedReport = { found: string[]; missing: string[]; rows: ReportRow[] };
+/** Filled in by the person uploading when the report itself does not say. */
+export type ReportOptions = { carrier?: string; termMonths?: number };
 
-export function parseReport(text: string): ParsedReport {
-  const cells = parseCsv(text);
+/** Carrier reports use short product codes. */
+const PRODUCTS: Record<string, string> = { ppa: "Personal auto", cv: "Commercial auto", ho: "Home", rv: "RV", mc: "Motorcycle", ren: "Renters" };
+
+/** "2037751653 - 00" and "2037751653-01" are the same policy in different terms. */
+export const policyBase = (v: string) => v.trim().replace(/\s*-\s*\d{1,2}$/, "");
+
+export function parseReport(input: string | string[][], opts: ReportOptions = {}): ParsedReport {
+  const cells = typeof input === "string" ? parseCsv(input) : input.filter((r) => r.some((c) => c.trim()));
   // The heading row is the first row that names a policy number column. Reports often start with a title line or two.
   const headAt = cells.findIndex((r) => r.some((c) => (HEADINGS.policyNumber as readonly string[]).includes(norm(c))));
   if (headAt < 0) return { found: [], missing: ["Policy number"], rows: [] };
@@ -106,7 +114,9 @@ export function parseReport(text: string): ParsedReport {
   const has = (f: Field) => col[f] >= 0;
   const missing: string[] = [];
   if (!has("name") && !(has("first") && has("last"))) missing.push("Client name");
-  for (const f of ["carrier", "premium", "effective"] as Field[]) if (!has(f)) missing.push(FIELD_LABELS[f]);
+  for (const f of ["premium", "effective"] as Field[]) if (!has(f)) missing.push(FIELD_LABELS[f]);
+  if (!has("carrier") && !opts.carrier?.trim()) missing.push("Carrier (type the carrier's name above, since this report does not have a carrier column)");
+  const term = opts.termMonths === 6 ? 6 : 12;
 
   const rows = cells.slice(headAt + 1).map((r, i): ReportRow => {
     const get = (f: Field) => (has(f) ? (r[col[f]] ?? "").trim() : "");
@@ -116,7 +126,7 @@ export function parseReport(text: string): ParsedReport {
     let expirationAssumed = false;
     if (!expiration && effective) {
       const months = Number((/\d+/.exec(get("term")) ?? [])[0]);
-      expiration = addMonths(effective, months === 6 || months === 12 ? months : 12);
+      expiration = addMonths(effective, months === 6 || months === 12 ? months : term);
       expirationAssumed = true;
     }
     const premium = parseMoney(get("premium"));
@@ -127,8 +137,8 @@ export function parseReport(text: string): ParsedReport {
     if (premium === null || premium <= 0) problems.push("no premium");
     if (effective && expiration && expiration <= effective) problems.push("expiration is before the effective date");
     return {
-      line: headAt + i + 2, name, phone: get("phone"), email: get("email"), carrier: get("carrier") || "Unknown carrier",
-      policyNumber: get("policyNumber"), lob: get("lob") || "Other", premium, effective, expiration, expirationAssumed,
+      line: headAt + i + 2, name, phone: get("phone"), email: get("email"), carrier: get("carrier") || opts.carrier?.trim() || "Unknown carrier",
+      policyNumber: policyBase(get("policyNumber")), lob: PRODUCTS[get("lob").toLowerCase()] ?? (get("lob") || "Other"), premium, effective, expiration, expirationAssumed,
       agent: get("agent"), problems,
     };
   }).filter((r) => r.name || r.policyNumber);

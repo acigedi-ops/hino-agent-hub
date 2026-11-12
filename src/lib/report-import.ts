@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { normalizeEmail, normalizePhone } from "@/lib/contacts";
 import { newReferralCode } from "@/lib/referrals";
-import { nameKey, parseReport, type ReportRow } from "@/lib/ezlynx";
+import { nameKey, parseReport, policyBase, type ReportOptions, type ReportRow } from "@/lib/ezlynx";
 
 export type PlanRow = {
   line: number; name: string; policy: string; carrier: string; premium: number | null; effective: string; expiration: string;
@@ -16,8 +16,8 @@ export type Plan = { found: string[]; missing: string[]; rows: PlanRow[]; counts
 const iso = (d: Date | null) => d?.toISOString().slice(0, 10) ?? "";
 
 /** Works out what each report row would do. With apply set, also does it. Owner only: the caller checks the role. */
-export async function runReport(u: SessionUser, text: string, apply: boolean, filename = "report.csv"): Promise<Plan> {
-  const report = parseReport(text);
+export async function runReport(u: SessionUser, input: string | string[][], apply: boolean, filename = "report.csv", opts: ReportOptions & { newClientsTo?: string } = {}): Promise<Plan> {
+  const report = parseReport(input, opts);
   const counts = { convert: 0, add: 0, update: 0, create: 0, skip: 0 };
   if (report.missing.length) return { found: report.found, missing: report.missing, rows: [], counts };
 
@@ -30,7 +30,8 @@ export async function runReport(u: SessionUser, text: string, apply: boolean, fi
   const byName = new Map<string, C[]>();
   const index = (c: C) => { const k = nameKey(c.fullName); byName.set(k, [...(byName.get(k) ?? []), c]); };
   contacts.forEach(index);
-  const byPolicy = new Map(policies.map((p) => [p.policyNumber.trim().toLowerCase(), p]));
+  const byPolicy = new Map(policies.map((p) => [policyBase(p.policyNumber).toLowerCase(), p]));
+  const fallback = users.find((x) => x.id === opts.newClientsTo) ?? { id: u.id, name: u.name };
   const agentByName = new Map(users.map((x) => [nameKey(x.name), x]));
   const userName = new Map(users.map((x) => [x.id, x.name]));
 
@@ -46,7 +47,7 @@ export async function runReport(u: SessionUser, text: string, apply: boolean, fi
 
     const existing = byPolicy.get(r.policyNumber.trim().toLowerCase());
     if (existing) {
-      if (apply) await db.policy.update({ where: { id: existing.id }, data: policyData(r) });
+      if (apply) await db.policy.update({ where: { id: existing.id }, data: { premium: r.premium!, effectiveDate: r.effective!, expirationDate: r.expiration! } });
       out("update", "Policy already in the hub. Premium and dates refreshed.", "", existing.contactId);
       continue;
     }
@@ -66,7 +67,7 @@ export async function runReport(u: SessionUser, text: string, apply: boolean, fi
       continue;
     }
 
-    const owner = agent ?? { id: u.id, name: u.name };
+    const owner = agent ?? fallback;
     let contactId: string | undefined;
     if (apply) {
       const phoneNorm = normalizePhone(r.phone), emailNorm = normalizeEmail(r.email);
@@ -84,7 +85,7 @@ export async function runReport(u: SessionUser, text: string, apply: boolean, fi
       const ghost: C = { id: `new-${r.line}`, fullName: r.name, agentId: owner.id, stage: "CLIENT", phoneNorm: normalizePhone(r.phone), emailNorm: normalizeEmail(r.email) };
       contacts.push(ghost); index(ghost);
     }
-    out("create", agent ? "Not in the hub yet. A new client is created." : `Not in the hub yet. A new client is created under ${u.name} because the report's agent ${r.agent ? `"${r.agent}" ` : ""}does not match a hub login.`, owner.name, contactId);
+    out("create", agent ? "Not in the hub yet. A new client is created." : `Not in the hub yet. A new client is created under ${owner.name}.`, owner.name, contactId);
   }
 
   if (apply) {

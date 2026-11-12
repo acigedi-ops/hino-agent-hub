@@ -115,6 +115,14 @@ test("EZLynx report rows are read from CSV", async () => {
   assert.equal(r.rows[0].expirationAssumed, true);
   assert.deepEqual(r.rows[1].problems, ["no policy number"]);
   assert.deepEqual(parseReport("a,b\n1,2").missing, ["Policy number"]);
+  // Carrier report layout: no carrier or expiration column, product codes, a term suffix on the policy number.
+  const carrierRows = [
+    ["Policy", "Named Insured", "Product", "DIV", "Processed", "Effective", "Premium + Fees", "Producer", "Additional Products"],
+    ["1234567890 - 00", "Sample Person", "PPA", "SV", "11/3/2026", "11/5/2026", "$1,250.40", "Agency Owner", "No"],
+  ];
+  assert.equal(parseReport(carrierRows).missing.length, 1);
+  const c = parseReport(carrierRows, { carrier: "National General", termMonths: 6 }).rows[0];
+  assert.deepEqual([c.policyNumber, c.carrier, c.lob, c.premium, c.expiration?.toISOString().slice(0, 10)], ["1234567890", "National General", "Personal auto", 1250.4, "2027-05-05"]);
 });
 
 test("referral codes are read however they are typed", async () => {

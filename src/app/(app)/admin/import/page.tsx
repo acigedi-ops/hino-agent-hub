@@ -3,18 +3,19 @@ import { requireAdmin } from "@/lib/auth";
 import { ImportForm } from "./ImportForm";
 
 export default async function ImportPage() {
-  await requireAdmin();
+  const u = await requireAdmin();
+  const agents = await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } });
   const history = await db.reportImport.findMany({ orderBy: { createdAt: "desc" }, take: 15, include: { uploadedBy: { select: { name: true } } } });
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="h1">EZLynx report</h1>
+        <h1 className="h1">New business report</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Upload the new business report from EZLynx. Each policy on it is matched to an applicant by phone, email or name, and that applicant becomes a client.
-          Policies for people who are not in the hub yet create a new client under the agent named on the report.
+          Upload the new business report from EZLynx or from the carrier. Each policy on it is matched to an applicant by phone, email or name, and that applicant becomes a client.
+          Policies for people who are not in the hub yet create a new client.
         </p>
       </div>
-      <ImportForm />
+      <ImportForm agents={agents} me={u.id} />
       <section className="space-y-2">
         <h2 className="h2">Past uploads</h2>
         <div className="card">

@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/", label: "Home" },
     { href: "/pipeline", label: "Applicants" },
     { href: "/clients", label: "Clients" },
-    ...(u.role === "ADMIN" ? [{ href: "/admin/import", label: "EZLynx report" }, { href: "/admin/referrals", label: "Referrals" }, { href: "/admin/agents", label: "Agents" }] : []),
+    ...(u.role === "ADMIN" ? [{ href: "/admin/import", label: "Policy report" }, { href: "/admin/referrals", label: "Referrals" }, { href: "/admin/agents", label: "Agents" }] : []),
     { href: "/account", label: "My account" },
   ];
   return (

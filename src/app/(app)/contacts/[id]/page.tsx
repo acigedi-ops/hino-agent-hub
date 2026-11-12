@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
-import { addNote, addPolicy, reassignContact, setPolicyStatus, setStage } from "@/app/actions";
+import { addNote, addPolicy, deleteDocument, reassignContact, setPolicyStatus, setStage, uploadDocument } from "@/app/actions";
+import { DOC_KINDS, fmtSize } from "@/lib/documents";
 import { ActionForm } from "@/components/ActionForm";
 import { StageBadge } from "@/components/StageBadge";
 
@@ -15,6 +16,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     include: {
       agent: true, intake: { select: { updatedAt: true } },
       policies: { orderBy: { expirationDate: "asc" } },
+      documents: { orderBy: { createdAt: "desc" }, select: { id: true, kind: true, filename: true, size: true, createdAt: true, uploadedBy: { select: { name: true } } } },
       activities: { orderBy: { createdAt: "desc" }, take: 100, include: { user: true } },
     },
   });
@@ -107,6 +109,32 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   </div>
                 </ActionForm>
               </details>
+            </div>
+          </section>
+          <section className="space-y-2">
+            <h2 className="h2">Documents</h2>
+            <div className="card space-y-3">
+              {c.documents.length === 0 && <p className="text-sm text-muted">No documents yet. Licenses, registrations and other files for this contact are kept here.</p>}
+              {c.documents.map((d) => (
+                <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2 last:border-0 last:pb-0">
+                  <div className="min-w-0 text-sm">
+                    <a className="font-semibold underline" href={`/contacts/${c.id}/documents/${d.id}`} target="_blank">{d.kind}</a>
+                    <div className="truncate text-xs text-muted">{d.filename} · {fmtSize(d.size)} · {d.uploadedBy.name} · {fmtDate(d.createdAt)}</div>
+                  </div>
+                  {u.role === "ADMIN" && (
+                    <ActionForm action={deleteDocument} submit="Delete" buttonClass="btn-quiet">
+                      <input type="hidden" name="documentId" value={d.id} />
+                    </ActionForm>
+                  )}
+                </div>
+              ))}
+              <ActionForm action={uploadDocument} submit="Upload" className="flex flex-wrap items-end gap-2 border-t border-line pt-3" buttonClass="btn-quiet">
+                <input type="hidden" name="contactId" value={c.id} />
+                <div><label className="label" htmlFor="doc-kind">Type</label>
+                  <select className="input" id="doc-kind" name="kind">{DOC_KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
+                <div className="min-w-0 flex-1"><label className="label" htmlFor="doc-file">File (PDF or photo, up to 10 MB)</label>
+                  <input className="input" id="doc-file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" required /></div>
+              </ActionForm>
             </div>
           </section>
         </div>

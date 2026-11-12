@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PDFDocument } from "pdf-lib";
 import { normalizePhone, normalizeEmail, stageFromPolicies, parseDate, daysUntil } from "./contacts";
+import { sniffMatches } from "./documents";
 import { sortClients, type ClientRow } from "./clients";
 import { fillIntakePdf, usDate } from "./intake-pdf";
 import { emptyIntake, parseIntake, isValidVin, TEXT_FIELDS, CHOICES, DRIVER_FIELDS, VEHICLE_FIELDS, VIOLATION_FIELDS, ROWS } from "./intake";
@@ -84,4 +85,13 @@ test("clients sort by name, premium and dates with missing dates last", () => {
   assert.equal(names(sortClients(rows(), "premium", "desc")), "beta,Gamma,Alpha");
   assert.equal(names(sortClients(rows(), "renewal", "asc")), "Gamma,beta,Alpha");
   assert.equal(names(sortClients(rows(), "renewal", "desc")), "beta,Gamma,Alpha");
+});
+
+test("uploads are checked against their real file type", () => {
+  const bytes = (t: string) => new TextEncoder().encode(t);
+  assert.equal(sniffMatches("application/pdf", bytes("%PDF-1.7 ...")), true);
+  assert.equal(sniffMatches("application/pdf", bytes("<html>")), false);
+  assert.equal(sniffMatches("image/png", new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d])), true);
+  assert.equal(sniffMatches("image/jpeg", bytes("%PDF-")), false);
+  assert.equal(sniffMatches("text/html", bytes("<html>")), false);
 });

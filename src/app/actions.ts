@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut, type SessionUser } from "@/lib/auth";
 import { MANUAL_STAGES, normalizeEmail, normalizePhone, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
 import { intakeSchema, isValidVin } from "@/lib/intake";
+import { DOC_KINDS, DOC_TYPES, MAX_DOC_BYTES, sniffMatches } from "@/lib/documents";
 import type { FormState } from "@/components/ActionForm";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -240,6 +241,35 @@ export async function setPolicyStatus(_: FormState, f: FormData): Promise<FormSt
   await syncStage(p.contactId);
   await log(p.contactId, u.id, "policy", `Policy ${p.policyNumber} marked ${status.toLowerCase()}`);
   revalidatePath("/", "layout");
+  return {};
+}
+
+// ---------- documents ----------
+
+export async function uploadDocument(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const c = await ownedContact(u, s(f, "contactId"));
+  const file = f.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file first." };
+  if (file.size > MAX_DOC_BYTES) return { error: "That file is over 10 MB. Take a smaller photo or compress the PDF." };
+  if (!DOC_TYPES[file.type]) return { error: "Only PDF, JPEG, PNG, WebP and HEIC files are accepted." };
+  const data = new Uint8Array(await file.arrayBuffer());
+  if (!sniffMatches(file.type, data)) return { error: "That file does not look like a real PDF or image. Export it again and retry." };
+  const kind = DOC_KINDS.includes(s(f, "kind")) ? s(f, "kind") : "Other";
+  const filename = file.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 120) || "document";
+  await db.document.create({ data: { contactId: c.id, uploadedById: u.id, kind, filename, mimeType: file.type, size: file.size, data } });
+  await log(c.id, u.id, "document", `Document added: ${kind} (${filename})`);
+  revalidatePath(`/contacts/${c.id}`);
+  return { ok: `${kind} saved to this contact.` };
+}
+
+export async function deleteDocument(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireAdmin();
+  const d = await db.document.findUnique({ where: { id: s(f, "documentId") }, select: { id: true, contactId: true, kind: true, filename: true } });
+  if (!d) return { error: "Document not found." };
+  await db.document.delete({ where: { id: d.id } });
+  await log(d.contactId, u.id, "document", `Document deleted: ${d.kind} (${d.filename})`);
+  revalidatePath(`/contacts/${d.contactId}`);
   return {};
 }
 

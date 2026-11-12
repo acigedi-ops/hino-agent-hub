@@ -44,6 +44,7 @@ model User {
   sessions     Session[]
   contacts     Contact[]
   activities   Activity[]
+  documents    Document[]
 }
 
 model Session {
@@ -79,6 +80,7 @@ model Contact {
   intake      Intake?
   policies    Policy[]
   activities  Activity[]
+  documents   Document[]
 
   @@index([agentId, stage])
   @@index([phoneNorm])
@@ -120,6 +122,24 @@ model Activity {
   kind      String
   text      String
   createdAt DateTime @default(now())
+
+  @@index([contactId, createdAt])
+}
+
+/// A file attached to a contact (license, registration, declarations page). Bytes live in the database so they are
+/// covered by the same access rules and backups as the rest of the record.
+model Document {
+  id           String   @id @default(cuid())
+  contactId    String
+  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  kind         String
+  filename     String
+  mimeType     String
+  size         Int
+  data         Bytes
+  createdAt    DateTime @default(now())
 
   @@index([contactId, createdAt])
 }

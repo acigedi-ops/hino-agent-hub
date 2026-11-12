@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum Stage {
+  LEAD
+  PROSPECT
+  QUOTING
+  QUOTED
+  CLIENT
+  LOST
+  FORMER
+}
+
+enum QuoteType {
+  PERSONAL
+  COMMERCIAL
+}
+
+enum PolicyStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String
+  passwordHash String
+  role         Role       @default(AGENT)
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  sessions     Session[]
+  contacts     Contact[]
+  activities   Activity[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Contact {
+  id          String     @id @default(cuid())
+  agentId     String
+  agent       User       @relation(fields: [agentId], references: [id])
+  stage       Stage      @default(LEAD)
+  type        QuoteType  @default(PERSONAL)
+  fullName    String
+  phone       String?
+  phoneNorm   String?
+  email       String?
+  emailNorm   String?
+  dob         DateTime?  @db.Date
+  address     String?
+  leadSource  String?
+  priority    String?
+  lostReason  String?
+  requoteDate DateTime?  @db.Date
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  intake      Intake?
+  policies    Policy[]
+  activities  Activity[]
+
+  @@index([agentId, stage])
+  @@index([phoneNorm])
+  @@index([emailNorm])
+}
+
+model Intake {
+  id        String   @id @default(cuid())
+  contactId String   @unique
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Policy {
+  id             String       @id @default(cuid())
+  contactId      String
+  contact        Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  line           String
+  carrier        String
+  policyNumber   String
+  premium        Decimal      @db.Decimal(12, 2)
+  effectiveDate  DateTime     @db.Date
+  expirationDate DateTime     @db.Date
+  status         PolicyStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+
+  @@index([contactId])
+  @@index([expirationDate])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  kind      String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([contactId, createdAt])
+}

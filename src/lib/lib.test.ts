@@ -148,3 +148,16 @@ test("referral codes are read however they are typed", async () => {
   assert.equal(cleanCode("RHABCDE"), "RHABCDE");
   assert.equal(cleanCode("abc"), null);
 });
+
+test("agent document status follows the newest upload and the license date", async () => {
+  const { docState } = await import("./agent-docs");
+  const now = new Date("2026-11-12T12:00:00Z");
+  const d = (kind: string, status: "PENDING" | "APPROVED" | "REJECTED", created: string, expires?: string) =>
+    ({ kind, status, createdAt: new Date(created), expiresOn: expires ? new Date(expires) : null });
+  assert.equal(docState([], "W-9", now), "missing");
+  assert.equal(docState([d("W-9", "REJECTED", "2026-11-01"), d("W-9", "PENDING", "2026-11-02")], "W-9", now), "pending");
+  assert.equal(docState([d("W-9", "APPROVED", "2026-11-01"), d("W-9", "REJECTED", "2026-11-02")], "W-9", now), "rejected");
+  assert.equal(docState([d("Producer license", "APPROVED", "2026-01-01", "2027-06-30")], "Producer license", now), "approved");
+  assert.equal(docState([d("Producer license", "APPROVED", "2026-01-01", "2026-12-15")], "Producer license", now), "expiring");
+  assert.equal(docState([d("Producer license", "APPROVED", "2026-01-01", "2026-10-31")], "Producer license", now), "expired");
+});

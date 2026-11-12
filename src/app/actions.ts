@@ -8,6 +8,7 @@ import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut,
 import { MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
 import { createContactCore, findReferrer, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
 import { lookupVin } from "@/lib/vin";
+import { AGENT_DOC_KINDS } from "@/lib/agent-docs";
 import type { FormState } from "@/components/ActionForm";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -218,6 +219,38 @@ export async function deleteDocument(_: FormState, f: FormData): Promise<FormSta
   await db.document.delete({ where: { id: d.id } });
   await log(d.contactId, u.id, "document", `Document deleted: ${d.kind} (${d.filename})`);
   revalidatePath(`/contacts/${d.contactId}`);
+  return {};
+}
+
+// ---------- agent compliance documents ----------
+
+export async function uploadAgentDocument(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const file = f.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a file first." };
+  const upload = { name: file.name, type: file.type, data: new Uint8Array(await file.arrayBuffer()) };
+  const problem = uploadProblem(upload);
+  if (problem) return { error: problem };
+  const kind = AGENT_DOC_KINDS.includes(s(f, "kind")) ? s(f, "kind") : "Other";
+  const expiresOn = parseDate(s(f, "expiresOn"));
+  if (kind === "Producer license" && !expiresOn) return { error: "Enter the date your license expires." };
+  await db.agentDocument.create({
+    data: { userId: u.id, kind, filename: upload.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 120) || "document", mimeType: upload.type, size: upload.data.length, data: upload.data, expiresOn },
+  });
+  revalidatePath("/", "layout");
+  return { ok: `${kind} uploaded. The owner will review it.` };
+}
+
+/** Owner only: approves or rejects an agent's document. A rejection needs a reason the agent can act on. */
+export async function reviewAgentDocument(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireAdmin();
+  const approve = s(f, "decision") === "approve";
+  const note = s(f, "note").slice(0, 300);
+  if (!approve && !note) return { error: "Say what is wrong so the agent can fix it." };
+  const d = await db.agentDocument.findUnique({ where: { id: s(f, "documentId") }, select: { id: true } });
+  if (!d) return { error: "Document not found." };
+  await db.agentDocument.update({ where: { id: d.id }, data: { status: approve ? "APPROVED" : "REJECTED", reviewNote: approve ? null : note, reviewedById: u.id, reviewedAt: new Date() } });
+  revalidatePath("/", "layout");
   return {};
 }
 

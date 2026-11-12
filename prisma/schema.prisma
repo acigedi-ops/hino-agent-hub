@@ -44,6 +44,8 @@ model User {
   activities   Activity[]
   documents    Document[]
   imports      ReportImport[]
+  agentDocuments    AgentDocument[] @relation("AgentDocOwner")
+  reviewedDocuments AgentDocument[] @relation("AgentDocReviewer")
 }
 
 model Session {
@@ -164,4 +166,33 @@ model ReportImport {
   updated      Int
   skipped      Int
   createdAt    DateTime @default(now())
+}
+
+enum DocStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A compliance document an agent uploads about themselves (W-9, producer license) for the owner to approve.
+model AgentDocument {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation("AgentDocOwner", fields: [userId], references: [id], onDelete: Cascade)
+  kind         String
+  filename     String
+  mimeType     String
+  size         Int
+  data         Bytes
+  /// For a license: the date it expires.
+  expiresOn    DateTime? @db.Date
+  status       DocStatus @default(PENDING)
+  reviewNote   String?
+  reviewedById String?
+  reviewedBy   User?     @relation("AgentDocReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, kind, createdAt])
+  @@index([status])
 }

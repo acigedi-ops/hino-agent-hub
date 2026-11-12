@@ -1,0 +1,29 @@
+# Render Blueprint: one web service and one Postgres database.
+databases:
+  - name: rhino-hub-db
+    plan: free
+    region: oregon
+
+services:
+  - type: web
+    name: rhino-agent-hub
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --include=dev && npm run build
+    # Migrations and the first owner login run at start, so they work on plans without a pre-deploy step.
+    startCommand: npx prisma migrate deploy && npm run db:seed && npm run start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: rhino-hub-db
+          property: connectionString
+      - key: SEED_ADMIN_NAME
+        value: Owner
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false

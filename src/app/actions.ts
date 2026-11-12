@@ -232,7 +232,8 @@ export async function uploadAgentDocument(_: FormState, f: FormData): Promise<Fo
   const problem = uploadProblem(upload);
   if (problem) return { error: problem };
   const kind = AGENT_DOC_KINDS.includes(s(f, "kind")) ? s(f, "kind") : "Other";
-  const expiresOn = parseDate(s(f, "expiresOn"));
+  // A W-9 does not expire, so a date left in the form from an earlier upload is ignored.
+  const expiresOn = kind === "W-9" ? null : parseDate(s(f, "expiresOn"));
   if (kind === "Producer license" && !expiresOn) return { error: "Enter the date your license expires." };
   await db.agentDocument.create({
     data: { userId: u.id, kind, filename: upload.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 120) || "document", mimeType: upload.type, size: upload.data.length, data: upload.data, expiresOn },

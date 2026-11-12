@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { PDFDocument } from "pdf-lib";
 import { normalizePhone, normalizeEmail, stageFromPolicies, parseDate, daysUntil } from "./contacts";
+import { sortClients, type ClientRow } from "./clients";
 import { fillIntakePdf, usDate } from "./intake-pdf";
 import { emptyIntake, parseIntake, isValidVin, TEXT_FIELDS, CHOICES, DRIVER_FIELDS, VEHICLE_FIELDS, VIOLATION_FIELDS, ROWS } from "./intake";
 
@@ -70,4 +71,17 @@ test("every form field exists in the PDF template and fills", async () => {
   assert.equal(f.getCheckBox("d2_gs").isChecked(), true);
   assert.equal(f.getCheckBox("v1_liab_no").isChecked(), true);
   assert.equal(f.getTextField("v1_vin").getText(), "1HGCM82633A004352");
+});
+
+test("clients sort by name, premium and dates with missing dates last", () => {
+  const row = (name: string, premium: number, renewal: string | null): ClientRow => ({
+    id: name, name, type: "PERSONAL", stage: "CLIENT", phone: "", agent: "A", carriers: "", premium, policies: 1,
+    effective: null, renewal: renewal ? new Date(renewal) : null,
+  });
+  const rows = () => [row("beta", 300, "2027-03-01"), row("Alpha", 100, null), row("Gamma", 200, "2026-12-01")];
+  const names = (r: ClientRow[]) => r.map((x) => x.name).join(",");
+  assert.equal(names(sortClients(rows(), "name", "asc")), "Alpha,beta,Gamma");
+  assert.equal(names(sortClients(rows(), "premium", "desc")), "beta,Gamma,Alpha");
+  assert.equal(names(sortClients(rows(), "renewal", "asc")), "Gamma,beta,Alpha");
+  assert.equal(names(sortClients(rows(), "renewal", "desc")), "beta,Gamma,Alpha");
 });

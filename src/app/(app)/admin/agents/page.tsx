@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { createAgent, resetPassword, setAgentActive } from "@/app/actions";
+import { createAgent, renameAgent, resetPassword, setAgentActive } from "@/app/actions";
 import { ActionForm } from "@/components/ActionForm";
 
 export default async function Agents() {
@@ -17,8 +17,13 @@ export default async function Agents() {
           <tbody>
             {users.map((a) => (
               <tr key={a.id} className="border-b border-line align-top last:border-0">
-                <td className="td font-semibold">{a.name}</td>
-                <td className="td">{a.email}</td>
+                <td className="td" colSpan={2}>
+                  <ActionForm action={renameAgent} submit="Save" buttonClass="btn-quiet" className="flex flex-wrap items-start gap-2">
+                    <input type="hidden" name="userId" value={a.id} />
+                    <input className="input w-44 font-semibold" name="name" defaultValue={a.name} aria-label={`Name of ${a.name}`} required />
+                    <input className="input w-56" name="email" type="email" defaultValue={a.email} aria-label={`Email of ${a.name}`} required />
+                  </ActionForm>
+                </td>
                 <td className="td">{a.role === "ADMIN" ? "Owner" : "Agent"}</td>
                 <td className="td">{a._count.contacts}</td>
                 <td className="td">

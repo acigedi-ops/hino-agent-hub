@@ -238,6 +238,20 @@ export async function createAgent(_: FormState, f: FormData): Promise<FormState>
   return { ok: `Login created for ${name}. Share the temporary password with them privately.` };
 }
 
+/** Owner only: fixes a login's name or email, for example after a typo. */
+export async function renameAgent(_: FormState, f: FormData): Promise<FormState> {
+  await requireAdmin();
+  const id = s(f, "userId");
+  const name = s(f, "name");
+  const email = s(f, "email").toLowerCase();
+  if (name.length < 2 || !email.includes("@")) return { error: "Enter a name and a valid email." };
+  const taken = await db.user.findUnique({ where: { email } });
+  if (taken && taken.id !== id) return { error: "Someone else already has that email." };
+  await db.user.update({ where: { id }, data: { name, email } });
+  revalidatePath("/", "layout");
+  return { ok: "Saved." };
+}
+
 export async function setAgentActive(_: FormState, f: FormData): Promise<FormState> {
   const u = await requireAdmin();
   const id = s(f, "userId");

@@ -49,5 +49,6 @@ export const daysUntil = (d: Date, now = new Date()) =>
   Math.ceil((d.getTime() - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 864e5);
 
 export const LEAD_SOURCES = ["Referral", "Walk-in", "Phone call", "Website", "Social media", "Existing client", "Purchased lead", "Other"];
+export const SOURCE_KINDS = ["Dealership", "Lawyer", "Real estate agent", "Mortgage broker", "Body shop", "Accountant", "Other business"];
 export const LOST_REASONS = ["Price too high", "Stayed with current carrier", "Went with another agency", "No response", "Could not place coverage", "Not ready yet", "Other"];
 export const POLICY_LINES = ["Personal auto", "Commercial auto", "Trucking", "Cargo", "General liability", "Home", "Renters", "Other"];

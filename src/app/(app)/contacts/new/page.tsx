@@ -7,6 +7,7 @@ import { LEAD_SOURCES } from "@/lib/contacts";
 export default async function NewContact() {
   const u = await requireUser();
   const agents = u.role === "ADMIN" ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
+  const sources = await db.referralSource.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, kind: true } });
   return (
     <div className="max-w-xl space-y-4">
       <h1 className="h1">New applicant</h1>
@@ -25,8 +26,13 @@ export default async function NewContact() {
           <div><label className="label" htmlFor="priority">Priority</label>
             <select className="input" id="priority" name="priority" defaultValue="Normal"><option>High</option><option>Normal</option><option>Low</option></select></div>
         </div>
-        <div><label className="label" htmlFor="referralCode">Referral code (if a client sent them)</label>
-          <input className="input max-w-48 uppercase" id="referralCode" name="referralCode" placeholder="RH-" autoComplete="off" /></div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div><label className="label" htmlFor="referralSourceId">Referral source (if a business sent them)</label>
+            <select className="input" id="referralSourceId" name="referralSourceId"><option value="">None</option>{sources.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.kind})</option>)}</select>
+            <p className="mt-1 text-xs text-muted">Not in the list? <a className="underline" href="/sources" target="_blank">Add it under Referral sources</a>.</p></div>
+          <div><label className="label" htmlFor="referralCode">Referral code (if a client sent them)</label>
+            <input className="input max-w-48 uppercase" id="referralCode" name="referralCode" placeholder="RH-" autoComplete="off" /></div>
+        </div>
         {u.role === "ADMIN" && (
           <div><label className="label" htmlFor="agentId">Agent</label>
             <select className="input" id="agentId" name="agentId" defaultValue={u.id}>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>

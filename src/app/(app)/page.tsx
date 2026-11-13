@@ -4,6 +4,7 @@ import { contactScope, requireUser } from "@/lib/auth";
 import { STAGES, daysUntil, fmtDate, fmtMoney } from "@/lib/contacts";
 import { REQUIRED_AGENT_DOCS, docState, needsAction } from "@/lib/agent-docs";
 import { assistantEnabled } from "@/lib/assistant";
+import { unreadCount } from "@/lib/messages";
 import { AssistantBox } from "@/components/AssistantBox";
 
 export default async function Home() {
@@ -25,6 +26,7 @@ export default async function Home() {
   const myDocs = u.role === "AGENT" ? await db.agentDocument.findMany({ where: { userId: u.id }, select: { kind: true, status: true, expiresOn: true, createdAt: true } }) : [];
   const docsToDo = u.role === "AGENT" ? REQUIRED_AGENT_DOCS.filter((k) => needsAction(docState(myDocs, k))) : [];
   const docsToReview = u.role === "ADMIN" ? await db.agentDocument.count({ where: { status: "PENDING" } }) : 0;
+  const unread = await unreadCount(u.id);
   const count = (k: string) => byStage.find((b) => b.stage === k)?._count ?? 0;
 
   return (
@@ -34,6 +36,11 @@ export default async function Home() {
         <Link href="/contacts/new" className="btn-gold">+ New applicant</Link>
       </div>
 
+      {unread > 0 && (
+        <Link href="/inbox" className="block rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 hover:underline">
+          You have {unread} unread {unread === 1 ? "message" : "messages"} in your inbox.
+        </Link>
+      )}
       {docsToDo.length > 0 && (
         <Link href="/documents" className="block rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900 hover:underline">
           Your {docsToDo.join(" and ")} {docsToDo.length === 1 ? "needs" : "need"} attention. Open My documents to upload.

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
-import { addNote, addPolicy, deleteDocument, reassignContact, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
+import { addNote, addPolicy, deleteDocument, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
 import { showCode } from "@/lib/referrals";
 import { DOC_KINDS, fmtSize } from "@/lib/documents";
 import { ActionForm } from "@/components/ActionForm";
@@ -16,6 +16,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     where: { id, ...contactScope(u) },
     include: {
       agent: true, intake: { select: { updatedAt: true } },
+      referralSource: { select: { id: true, name: true, kind: true } },
       referredBy: { select: { id: true, fullName: true, agentId: true } },
       referrals: { select: { id: true, fullName: true, stage: true, agentId: true, referredAt: true, referralRewardedAt: true }, orderBy: { referredAt: "desc" } },
       policies: { orderBy: { expirationDate: "asc" } },
@@ -25,6 +26,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   });
   if (!c) notFound();
   const agents = u.role === "ADMIN" ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
+  const sources = await db.referralSource.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, kind: true } });
   const isClient = c.stage === "CLIENT";
   /** Referrals cross agents, so only link to a contact this person is allowed to open. */
   const see = (agentId: string) => u.role === "ADMIN" || agentId === u.id;
@@ -71,6 +73,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   {!c.intake && <p className="text-xs text-muted">Fill the intake form before marking this applicant as quoted.</p>}
                 </ActionForm>
               )}
+              <Link className="inline-block text-sm font-semibold underline" href={`/inbox/new?contact=${c.id}`}>Send a message about this {c.stage === "CLIENT" ? "client" : "applicant"}</Link>
               {u.role === "ADMIN" && (
                 <ActionForm action={reassignContact} submit="Reassign" className="flex flex-wrap items-end gap-2 border-t border-line pt-3" buttonClass="btn-quiet">
                   <input type="hidden" name="contactId" value={c.id} />
@@ -125,6 +128,14 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   <div className="select-all text-xl font-bold tracking-wider">{c.referralCode ? showCode(c.referralCode) : "None yet"}</div>
                 </div>
                 <p className="max-w-xs text-xs text-muted">Give this code to {c.fullName.split(" ")[0]} to share with family and friends. Enter it when you add the person they send.</p>
+              </div>
+              <div className="border-t border-line pt-3">
+                {c.referralSource && <p className="mb-2">Sent by <Link className="font-semibold underline" href={`/sources/${c.referralSource.id}`}>{c.referralSource.name}</Link> ({c.referralSource.kind}).</p>}
+                <ActionForm action={setReferralSource} submit="Save" className="flex flex-wrap items-end gap-2" buttonClass="btn-quiet">
+                  <input type="hidden" name="contactId" value={c.id} />
+                  <div><label className="label" htmlFor="referralSourceId">Referral source (business)</label>
+                    <select className="input" id="referralSourceId" name="referralSourceId" defaultValue={c.referralSource?.id ?? ""}><option value="">None</option>{sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+                </ActionForm>
               </div>
               {c.referredBy ? (
                 <p className="border-t border-line pt-3">Referred by{" "}

@@ -19,7 +19,7 @@ export async function findDuplicate(phoneNorm: string | null, emailNorm: string 
   return db.contact.findFirst({ where: { OR: or, NOT: exceptId ? { id: exceptId } : undefined }, include: { agent: true } });
 }
 
-export type NewContact = { fullName: string; phone?: string; email?: string; type?: string; leadSource?: string; priority?: string; agentId?: string; referralCode?: string };
+export type NewContact = { fullName: string; phone?: string; email?: string; type?: string; leadSource?: string; priority?: string; agentId?: string; referralCode?: string; referralSourceId?: string };
 
 /** Finds whose referral code this is. Codes work across all agents, since a client may refer someone to a different agent. */
 export async function findReferrer(code: string) {
@@ -48,6 +48,9 @@ export async function createContactCore(u: SessionUser, n: NewContact, opts: { a
   const referrer = n.referralCode?.trim() ? await findReferrer(n.referralCode) : null;
   if (n.referralCode?.trim() && !referrer) return { error: "No one in the hub has that referral code. Check it with the person, or leave it empty." };
 
+  const source = n.referralSourceId ? await db.referralSource.findUnique({ where: { id: n.referralSourceId }, select: { id: true, name: true } }) : null;
+  if (n.referralSourceId && !source) return { error: "That referral source no longer exists. Pick another one." };
+
   let agentId = u.id;
   if (u.role === "ADMIN" && n.agentId) {
     const agent = await db.user.findFirst({ where: { id: n.agentId, active: true } });
@@ -58,13 +61,15 @@ export async function createContactCore(u: SessionUser, n: NewContact, opts: { a
     data: {
       agentId, fullName, phone: phone || null, phoneNorm, email: email || null, emailNorm,
       type: n.type === "COMMERCIAL" ? "COMMERCIAL" : "PERSONAL",
-      leadSource: n.leadSource || (referrer ? "Referral" : null),
+      leadSource: n.leadSource || (referrer || source ? "Referral" : null),
+      referralSourceId: source?.id ?? null,
       priority: ["High", "Normal", "Low"].includes(n.priority ?? "") ? n.priority : null,
       referralCode: newReferralCode(),
       ...(referrer ? { referredById: referrer.id, referredAt: new Date() } : {}),
     },
   });
   await logActivity(contact.id, u.id, "created", referrer ? `Applicant added. Referred by ${referrer.fullName}` : "Applicant added");
+  if (source) await logActivity(contact.id, u.id, "referral", `Sent by ${source.name}`);
   if (referrer) await logActivity(referrer.id, u.id, "referral", `Referred ${fullName}`);
   return { contact };
 }

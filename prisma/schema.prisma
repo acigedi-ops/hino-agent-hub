@@ -46,6 +46,9 @@ model User {
   imports      ReportImport[]
   agentDocuments    AgentDocument[] @relation("AgentDocOwner")
   reviewedDocuments AgentDocument[] @relation("AgentDocReviewer")
+  memberships       ConversationMember[]
+  messages          Message[]
+  referralSources   ReferralSource[]
 }
 
 model Session {
@@ -90,8 +93,13 @@ model Contact {
   referredAt         DateTime?
   /// When the owner sent the referrer their reward for this referral.
   referralRewardedAt DateTime?
+  conversations      Conversation[]
+  /// A business that sent this person (dealership, lawyer...). Separate from a client's referral code.
+  referralSourceId   String?
+  referralSource     ReferralSource? @relation(fields: [referralSourceId], references: [id], onDelete: SetNull)
 
   @@index([referredAt])
+  @@index([referralSourceId])
   @@index([agentId, stage])
   @@index([phoneNorm])
   @@index([emailNorm])
@@ -195,4 +203,61 @@ model AgentDocument {
 
   @@index([userId, kind, createdAt])
   @@index([status])
+}
+
+/// An internal message thread between hub users. Optionally about one contact.
+model Conversation {
+  id        String    @id @default(cuid())
+  subject   String
+  contactId String?
+  contact   Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+  /// Time of the newest message, for sorting the inbox.
+  lastAt    DateTime  @default(now())
+  members   ConversationMember[]
+  messages  Message[]
+
+  @@index([lastAt])
+}
+
+model ConversationMember {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Messages newer than this are unread for this person.
+  lastReadAt     DateTime     @default(now())
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+/// A business or professional that sends the agency a lot of people: a dealership, a lawyer, a real estate agent.
+model ReferralSource {
+  id          String    @id @default(cuid())
+  name        String
+  kind        String
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?
+  notes       String?
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  contacts    Contact[]
+
+  @@index([name])
 }

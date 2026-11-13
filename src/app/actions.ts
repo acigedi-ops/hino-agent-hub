@@ -5,10 +5,11 @@ import { headers } from "next/headers";
 import type { Stage } from "@prisma/client";
 import { db } from "@/lib/db";
 import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut, type SessionUser } from "@/lib/auth";
-import { MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
+import { SOURCE_KINDS, MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
 import { createContactCore, findReferrer, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
 import { lookupVin } from "@/lib/vin";
 import { AGENT_DOC_KINDS } from "@/lib/agent-docs";
+import { MAX_BODY, MAX_SUBJECT, replyTo, startConversation } from "@/lib/messages";
 import type { FormState } from "@/components/ActionForm";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -66,7 +67,7 @@ export async function createContact(_: FormState, f: FormData): Promise<FormStat
   const u = await requireUser();
   const res = await createContactCore(u, {
     fullName: s(f, "fullName"), phone: s(f, "phone"), email: s(f, "email"), type: s(f, "type"),
-    leadSource: s(f, "leadSource"), priority: s(f, "priority"), agentId: s(f, "agentId"), referralCode: s(f, "referralCode"),
+    leadSource: s(f, "leadSource"), priority: s(f, "priority"), agentId: s(f, "agentId"), referralCode: s(f, "referralCode"), referralSourceId: s(f, "referralSourceId"),
   });
   if ("error" in res) return res;
   redirect(`/contacts/${res.contact.id}`);
@@ -314,4 +315,81 @@ export async function changeOwnPassword(_: FormState, f: FormData): Promise<Form
   if (password !== String(f.get("confirm") ?? "")) return { error: "The two passwords do not match." };
   await db.user.update({ where: { id: u.id }, data: { passwordHash: await hashPassword(password) } });
   return { ok: "Password changed." };
+}
+
+// ---------- internal messages ----------
+
+export async function sendMessage(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const subject = s(f, "subject"), body = s(f, "body");
+  if (!subject) return { error: "Add a subject." };
+  if (!body) return { error: "Write a message." };
+  if (subject.length > MAX_SUBJECT || body.length > MAX_BODY) return { error: "That message is too long." };
+  let contactId: string | null = s(f, "contactId") || null;
+  // Only link a contact the sender is allowed to see.
+  if (contactId && !(await db.contact.findFirst({ where: { id: contactId, ...contactScope(u) }, select: { id: true } }))) contactId = null;
+  const res = await startConversation(u, f.getAll("to").map(String), subject, body, contactId);
+  if ("error" in res) return { error: res.error };
+  revalidatePath("/inbox");
+  redirect(`/inbox/${res.id}`);
+}
+
+export async function replyMessage(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const body = s(f, "body");
+  if (!body) return { error: "Write a reply." };
+  if (body.length > MAX_BODY) return { error: "That message is too long." };
+  const res = await replyTo(u, s(f, "conversationId"), body);
+  if ("error" in res) return { error: res.error };
+  revalidatePath("/inbox");
+  return {};
+}
+
+// ---------- referral sources (businesses that send people) ----------
+
+function sourceFields(f: FormData) {
+  const opt = (k: string) => s(f, k).slice(0, 300) || null;
+  return { name: s(f, "name").slice(0, 150), kind: SOURCE_KINDS.includes(s(f, "kind")) ? s(f, "kind") : "Other business",
+    contactName: opt("contactName"), phone: opt("phone"), email: opt("email"), address: opt("address"), notes: s(f, "notes").slice(0, 2000) || null };
+}
+
+export async function createReferralSource(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const data = sourceFields(f);
+  if (data.name.length < 2) return { error: "Enter the business name." };
+  const dup = await db.referralSource.findFirst({ where: { name: { equals: data.name, mode: "insensitive" } } });
+  if (dup) return { error: `${dup.name} is already in the list.` };
+  const src = await db.referralSource.create({ data: { ...data, createdById: u.id } });
+  revalidatePath("/sources");
+  redirect(`/sources/${src.id}`);
+}
+
+export async function updateReferralSource(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const src = await db.referralSource.findUnique({ where: { id: s(f, "id") } });
+  if (!src) return { error: "Referral source not found." };
+  // The list is shared, so only the person who added a source, or the owner, can change it.
+  if (u.role !== "ADMIN" && src.createdById !== u.id) return { error: "Only the owner or the agent who added this source can edit it." };
+  const data = sourceFields(f);
+  if (data.name.length < 2) return { error: "Enter the business name." };
+  const dup = await db.referralSource.findFirst({ where: { name: { equals: data.name, mode: "insensitive" }, NOT: { id: src.id } } });
+  if (dup) return { error: `${dup.name} is already in the list.` };
+  await db.referralSource.update({ where: { id: src.id }, data });
+  revalidatePath("/sources");
+  revalidatePath(`/sources/${src.id}`);
+  return { ok: "Saved." };
+}
+
+export async function setReferralSource(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const c = await ownedContact(u, s(f, "contactId"));
+  const id = s(f, "referralSourceId");
+  const src = id ? await db.referralSource.findUnique({ where: { id } }) : null;
+  if (id && !src) return { error: "Referral source not found." };
+  if ((c.referralSourceId ?? "") === id) return {};
+  await db.contact.update({ where: { id: c.id }, data: { referralSourceId: src?.id ?? null, leadSource: c.leadSource ?? (src ? "Referral" : null) } });
+  await log(c.id, u.id, "referral", src ? `Referral source set to ${src.name}` : "Referral source removed");
+  revalidatePath(`/contacts/${c.id}`);
+  revalidatePath("/sources");
+  return { ok: src ? `Sent by ${src.name}.` : "Removed." };
 }

@@ -10,6 +10,7 @@ import { createContactCore, findReferrer, logActivity, saveDocumentCore, saveInt
 import { lookupVin } from "@/lib/vin";
 import { AGENT_DOC_KINDS } from "@/lib/agent-docs";
 import { MAX_BODY, MAX_SUBJECT, replyTo, startConversation } from "@/lib/messages";
+import { addDays, settleTasks, syncAutoTasks, taskScope, today } from "@/lib/tasks";
 import type { FormState } from "@/components/ActionForm";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -91,6 +92,9 @@ export async function setStage(_: FormState, f: FormData): Promise<FormState> {
   }
   await db.contact.update({ where: { id: c.id }, data: { stage, lostReason, requoteDate } });
   await log(c.id, u.id, "stage", `Moved to ${stageLabel(stage)}${lostReason ? `: ${lostReason}` : ""}`);
+  // A requote date makes a task; leaving Lost drops a requote task that no longer applies.
+  if (stage !== "LOST") await db.task.updateMany({ where: { contactId: c.id, kind: "requote", doneAt: null }, data: { doneAt: new Date(), doneNote: `Moved to ${stageLabel(stage)}` } });
+  await syncAutoTasks(true);
   revalidatePath("/", "layout");
   return { ok: `Moved to ${stageLabel(stage)}.` };
 }
@@ -111,6 +115,8 @@ export async function reassignContact(_: FormState, f: FormData): Promise<FormSt
   const agent = await db.user.findFirst({ where: { id: s(f, "agentId"), active: true } });
   if (!c || !agent) return { error: "Pick an active agent." };
   await db.contact.update({ where: { id: c.id }, data: { agentId: agent.id } });
+  // Open work follows the client to the new agent.
+  await db.task.updateMany({ where: { contactId: c.id, doneAt: null }, data: { assigneeId: agent.id } });
   await log(c.id, u.id, "reassigned", `Reassigned to ${agent.name}`);
   revalidatePath("/", "layout");
   return { ok: `Now with ${agent.name}.` };
@@ -178,9 +184,10 @@ export async function addPolicy(_: FormState, f: FormData): Promise<FormState> {
   if (!effectiveDate || !expirationDate) return { error: "Enter both the effective and expiration dates." };
   if (expirationDate <= effectiveDate) return { error: "The expiration date must be after the effective date." };
 
-  await db.policy.create({ data: { contactId: c.id, line, carrier, policyNumber, premium, effectiveDate, expirationDate } });
+  await db.policy.create({ data: { contactId: c.id, line, carrier, policyNumber, premium, effectiveDate, expirationDate, writtenDate: effectiveDate } });
   await db.contact.update({ where: { id: c.id }, data: { lostReason: null, requoteDate: null } });
   await syncStage(c.id);
+  await syncAutoTasks(true);
   await log(c.id, u.id, "policy", `Policy bound: ${carrier} ${policyNumber}`);
   revalidatePath("/", "layout");
   return { ok: "Policy added. This contact is now a client." };
@@ -191,7 +198,8 @@ export async function setPolicyStatus(_: FormState, f: FormData): Promise<FormSt
   const p = await db.policy.findFirst({ where: { id: s(f, "policyId"), contact: contactScope(u) } });
   const status = s(f, "status");
   if (!p || !["ACTIVE", "CANCELLED", "EXPIRED"].includes(status)) return { error: "Policy not found." };
-  await db.policy.update({ where: { id: p.id }, data: { status: status as "ACTIVE" | "CANCELLED" | "EXPIRED" } });
+  await db.policy.update({ where: { id: p.id }, data: { status: status as "ACTIVE" | "CANCELLED" | "EXPIRED", cancelledAt: status === "CANCELLED" ? new Date() : null } });
+  if (status !== "ACTIVE") await settleTasks(p.id, ["renewal", "cancel_notice"], `Policy marked ${status.toLowerCase()}`);
   await syncStage(p.contactId);
   await log(p.contactId, u.id, "policy", `Policy ${p.policyNumber} marked ${status.toLowerCase()}`);
   revalidatePath("/", "layout");
@@ -392,4 +400,63 @@ export async function setReferralSource(_: FormState, f: FormData): Promise<Form
   revalidatePath(`/contacts/${c.id}`);
   revalidatePath("/sources");
   return { ok: src ? `Sent by ${src.name}.` : "Removed." };
+}
+
+// ---------- tasks and follow-ups ----------
+
+export async function addTask(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const title = s(f, "title").slice(0, 300);
+  if (title.length < 2) return { error: "Say what needs to be done." };
+  const dueOn = parseDate(s(f, "dueOn")) ?? today();
+  const contactId = s(f, "contactId");
+  const c = contactId ? await db.contact.findFirst({ where: { id: contactId, ...contactScope(u) }, select: { id: true, agentId: true } }) : null;
+  if (contactId && !c) return { error: "Contact not found." };
+  // Agents make tasks for themselves. The owner can give one to any agent; on a client it defaults to that client's agent.
+  let assigneeId = u.id;
+  if (u.role === "ADMIN") {
+    const pick = s(f, "assigneeId") || c?.agentId || u.id;
+    const a = await db.user.findFirst({ where: { id: pick, active: true }, select: { id: true } });
+    if (!a) return { error: "Pick an active agent." };
+    assigneeId = a.id;
+  }
+  await db.task.create({ data: { title, dueOn, assigneeId, createdById: u.id, contactId: c?.id ?? null } });
+  revalidatePath("/", "layout");
+  return { ok: "Task added." };
+}
+
+async function ownedTask(u: SessionUser, id: string) {
+  return db.task.findFirst({ where: { id, ...taskScope(u) } });
+}
+
+export async function completeTask(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const t = await ownedTask(u, s(f, "taskId"));
+  if (!t) return { error: "Task not found." };
+  if (t.doneAt) return {};
+  const note = s(f, "note").slice(0, 500);
+  await db.task.update({ where: { id: t.id }, data: { doneAt: new Date(), doneNote: note || null } });
+  if (t.contactId) await log(t.contactId, u.id, "task", `Done: ${t.title}${note ? `\n${note}` : ""}`);
+  revalidatePath("/", "layout");
+  return {};
+}
+
+export async function reopenTask(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const t = await ownedTask(u, s(f, "taskId"));
+  if (!t) return { error: "Task not found." };
+  await db.task.update({ where: { id: t.id }, data: { doneAt: null, doneNote: null } });
+  revalidatePath("/", "layout");
+  return {};
+}
+
+export async function snoozeTask(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const t = await ownedTask(u, s(f, "taskId"));
+  const days = Number(s(f, "days"));
+  if (!t || t.doneAt) return { error: "Task not found." };
+  if (![1, 3, 7, 14].includes(days)) return { error: "Pick how long to push it back." };
+  await db.task.update({ where: { id: t.id }, data: { dueOn: addDays(today(), days) } });
+  revalidatePath("/", "layout");
+  return {};
 }

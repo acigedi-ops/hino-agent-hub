@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
-import { addNote, addPolicy, deleteDocument, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
+import { addNote, addPolicy, addTask, deleteDocument, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
 import { showCode } from "@/lib/referrals";
 import { DOC_KINDS, fmtSize } from "@/lib/documents";
 import { ActionForm } from "@/components/ActionForm";
+import { TaskRow } from "@/components/TaskRow";
+import { today } from "@/lib/tasks";
 import { StageBadge } from "@/components/StageBadge";
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,6 +18,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     where: { id, ...contactScope(u) },
     include: {
       agent: true, intake: { select: { updatedAt: true } },
+      tasks: { where: { OR: [{ doneAt: null }, { doneAt: { gte: new Date(Date.now() - 30 * 864e5) } }] }, orderBy: [{ doneAt: { sort: "desc", nulls: "first" } }, { dueOn: "asc" }], take: 30, include: { assignee: { select: { name: true } }, policy: { select: { premium: true, expirationDate: true } } } },
       referralSource: { select: { id: true, name: true, kind: true } },
       referredBy: { select: { id: true, fullName: true, agentId: true } },
       referrals: { select: { id: true, fullName: true, stage: true, agentId: true, referredAt: true, referralRewardedAt: true }, orderBy: { referredAt: "desc" } },
@@ -192,6 +195,19 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           </section>
         </div>
 
+        <div className="space-y-6">
+        <section className="space-y-2">
+          <h2 className="h2">Follow-ups</h2>
+          <div className="card space-y-3">
+            <ActionForm action={addTask} submit="Add follow-up" className="flex flex-wrap items-end gap-2" buttonClass="btn-quiet">
+              <input type="hidden" name="contactId" value={c.id} />
+              <div className="min-w-0 flex-1 basis-48"><label className="label" htmlFor="taskTitle">What to do</label>
+                <input className="input" id="taskTitle" name="title" maxLength={300} placeholder="Call back with the quote" required /></div>
+              <div><label className="label" htmlFor="taskDue">Due</label><input className="input" id="taskDue" name="dueOn" type="date" defaultValue={today().toISOString().slice(0, 10)} /></div>
+            </ActionForm>
+            {c.tasks.length > 0 && <div className="-mx-4 -mb-4 border-t border-line">{c.tasks.map((x) => <TaskRow key={x.id} t={x} today={today()} showContact={false} showAgent={u.role === "ADMIN"} />)}</div>}
+          </div>
+        </section>
         <section className="space-y-2">
           <h2 className="h2">Timeline</h2>
           <div className="card space-y-3">
@@ -209,6 +225,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             </ul>
           </div>
         </section>
+        </div>
       </div>
     </div>
   );

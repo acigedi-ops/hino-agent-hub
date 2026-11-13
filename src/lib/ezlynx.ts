@@ -20,6 +20,8 @@ export type ReportRow = {
   /** What the row reports. Carrier activity reports list cancellations and reinstatements next to new business. */
   transaction: "new" | "renewal" | "cancel" | "cancel_notice" | "reinstate";
   processed: Date | null;
+  /** When the transaction takes effect, for example the cancel date. Only known when the report has it apart from the term start. */
+  actionDate: Date | null;
   problems: string[];
 };
 
@@ -125,6 +127,8 @@ export function parseReport(input: string | string[][], opts: ReportOptions = {}
   // Headings are tried in the order listed, so "Policy Term Start Date" wins over a plain "Effective" column, which on a cancellation row is the cancel date.
   for (const f of Object.keys(HEADINGS) as Field[]) col[f] = HEADINGS[f].map((h) => head.indexOf(h)).find((i) => i >= 0) ?? -1;
   const has = (f: Field) => col[f] >= 0;
+  // A report with a term start column often also has a plain "Effective" column holding the date of the transaction.
+  const actionCol = ["effective date", "effective", "eff date"].map((h) => head.indexOf(h)).find((i) => i >= 0 && i !== col.effective) ?? -1;
   const missing: string[] = [];
   if (!has("name") && !(has("first") && has("last"))) missing.push("Client name");
   for (const f of ["premium", "effective"] as Field[]) if (!has(f)) missing.push(FIELD_LABELS[f]);
@@ -157,7 +161,7 @@ export function parseReport(input: string | string[][], opts: ReportOptions = {}
     return {
       line: headAt + i + 2, name, phone: get("phone"), email: get("email"), carrier: get("carrier") || opts.carrier?.trim() || "Unknown carrier",
       policyNumber: policyBase(get("policyNumber")), lob: PRODUCTS[get("lob").toLowerCase()] ?? (get("lob") || "Other"), premium, effective, expiration, expirationAssumed,
-      agent: get("agent"), address, transaction, processed: parseUsDate(get("processed")), problems,
+      agent: get("agent"), address, transaction, processed: parseUsDate(get("processed")), actionDate: actionCol >= 0 ? parseUsDate((r[actionCol] ?? "").trim()) : null, problems,
     };
   }).filter((r) => r.name || r.policyNumber);
   // Oldest first, so a policy is added before the same file cancels it.

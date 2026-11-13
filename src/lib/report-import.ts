@@ -1,8 +1,9 @@
 import "server-only";
 import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
-import { normalizeEmail, normalizePhone } from "@/lib/contacts";
+import { fmtDate, normalizeEmail, normalizePhone } from "@/lib/contacts";
 import { newReferralCode } from "@/lib/referrals";
+import { reportTask, settleTasks, syncAutoTasks } from "@/lib/tasks";
 import { nameKey, parseReport, policyBase, type ReportOptions, type ReportRow } from "@/lib/ezlynx";
 
 export type PlanRow = {
@@ -50,24 +51,31 @@ export async function runReport(u: SessionUser, input: string | string[][], appl
     const note = (text: string) => real && db.activity.create({ data: { contactId: real.contactId, userId: u.id, kind: "policy", text: `${r.carrier} ${r.policyNumber}: ${text}` } });
     if (r.transaction === "cancel_notice") {
       if (!existing) { out("skip", "Skipped: cancel notice for a policy that is not in the hub."); continue; }
-      if (apply) await note(`cancel notice sent${r.effective ? `, cancels ${iso(r.effective)}` : ""}`);
-      out("update", "Cancel notice. A note is added to the client's timeline so the agent can call them.", "", real?.contactId);
+      if (apply) {
+        const when = r.actionDate ? `, cancels ${fmtDate(r.actionDate)}` : "";
+        await note(`cancel notice sent${when}`);
+        if (real) await reportTask("cancel_notice", real, `${r.carrier} ${r.policyNumber}`, r.actionDate ?? r.processed, when);
+      }
+      out("update", "Cancel notice. The agent gets a task to call the client.", "", real?.contactId);
       continue;
     }
     if (r.transaction === "cancel") {
       if (!existing) { out("skip", "Skipped: cancellation for a policy that is not in the hub."); continue; }
       if (apply && real) {
-        await db.policy.update({ where: { id: real.id }, data: { status: "CANCELLED" } });
+        await db.policy.update({ where: { id: real.id }, data: { status: "CANCELLED", cancelledAt: r.actionDate ?? r.processed ?? new Date() } });
+        await settleTasks(real.id, ["renewal", "cancel_notice"], "Policy cancelled on the policy report");
+        await reportTask("cancelled", real, `${r.carrier} ${r.policyNumber}`, r.actionDate ?? r.processed, "");
         if (!(await db.policy.count({ where: { contactId: real.contactId, status: "ACTIVE" } }))) await db.contact.update({ where: { id: real.contactId }, data: { stage: "FORMER" } });
         await note("cancelled");
       }
-      out("cancel", "Policy cancelled. The client becomes a former client if this was their last active policy.", "", real?.contactId);
+      out("cancel", "Policy cancelled. The agent gets a task to win it back. The client becomes a former client if this was their last active policy.", "", real?.contactId);
       continue;
     }
     if (r.transaction === "reinstate") {
       if (!existing) { out("skip", "Skipped: reinstatement for a policy that is not in the hub."); continue; }
       if (apply && real) {
-        await db.policy.update({ where: { id: real.id }, data: { status: "ACTIVE" } });
+        await db.policy.update({ where: { id: real.id }, data: { status: "ACTIVE", cancelledAt: null } });
+        await settleTasks(real.id, ["cancel_notice", "cancelled"], "Policy reinstated on the policy report");
         await db.contact.update({ where: { id: real.contactId }, data: { stage: "CLIENT" } });
         await note("reinstated");
       }
@@ -75,7 +83,10 @@ export async function runReport(u: SessionUser, input: string | string[][], appl
       continue;
     }
     if (existing) {
-      if (apply && real) await db.policy.update({ where: { id: real.id }, data: { premium: r.premium!, effectiveDate: r.effective!, expirationDate: r.expiration!, ...(r.transaction === "renewal" ? { status: "ACTIVE" as const } : {}) } });
+      if (apply && real) {
+        await db.policy.update({ where: { id: real.id }, data: { premium: r.premium!, effectiveDate: r.effective!, expirationDate: r.expiration!, ...(r.transaction === "renewal" ? { status: "ACTIVE" as const, cancelledAt: null } : {}) } });
+        if (r.transaction === "renewal") await settleTasks(real.id, ["renewal"], "Renewed on the policy report");
+      }
       out("update", r.transaction === "renewal" ? "Renewal. Premium and dates updated." : "Policy already in the hub. Premium and dates refreshed.", "", real?.contactId);
       continue;
     }
@@ -121,6 +132,7 @@ export async function runReport(u: SessionUser, input: string | string[][], appl
   }
 
   if (apply) {
+    await syncAutoTasks(true);
     await db.reportImport.create({
       data: { uploadedById: u.id, filename: filename.slice(0, 120), rows: rows.length, converted: counts.convert, created: counts.create, updated: counts.update + counts.add + counts.cancel, skipped: counts.skip },
     });
@@ -129,7 +141,7 @@ export async function runReport(u: SessionUser, input: string | string[][], appl
 }
 
 const policyData = (r: ReportRow) => ({
-  line: r.lob, carrier: r.carrier, policyNumber: r.policyNumber, premium: r.premium!, effectiveDate: r.effective!, expirationDate: r.expiration!, status: "ACTIVE" as const,
+  line: r.lob, carrier: r.carrier, policyNumber: r.policyNumber, premium: r.premium!, effectiveDate: r.effective!, expirationDate: r.expiration!, writtenDate: r.effective!, status: "ACTIVE" as const,
 });
 
 /** By name first. Phone or email is the fallback, and only for people who are not clients yet: a business and its owner often share a phone but are separate insureds. */

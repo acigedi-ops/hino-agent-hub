@@ -49,6 +49,8 @@ model User {
   memberships       ConversationMember[]
   messages          Message[]
   referralSources   ReferralSource[]
+  tasks             Task[] @relation("TaskAssignee")
+  tasksCreated      Task[] @relation("TaskCreator")
 }
 
 model Session {
@@ -94,6 +96,7 @@ model Contact {
   /// When the owner sent the referrer their reward for this referral.
   referralRewardedAt DateTime?
   conversations      Conversation[]
+  tasks              Task[]
   /// A business that sent this person (dealership, lawyer...). Separate from a client's referral code.
   referralSourceId   String?
   referralSource     ReferralSource? @relation(fields: [referralSourceId], references: [id], onDelete: SetNull)
@@ -126,6 +129,10 @@ model Policy {
   expirationDate DateTime     @db.Date
   status         PolicyStatus @default(ACTIVE)
   createdAt      DateTime     @default(now())
+  /// The first effective date. A renewal moves effectiveDate forward but never this, so new business can be counted by month.
+  writtenDate    DateTime?    @db.Date
+  cancelledAt    DateTime?
+  tasks          Task[]
 
   @@index([contactId])
   @@index([expirationDate])
@@ -260,4 +267,30 @@ model ReferralSource {
   contacts    Contact[]
 
   @@index([name])
+}
+
+/// Something an agent has to do: a follow-up they wrote themselves, or one the hub made for a renewal, a cancel notice,
+/// a cancellation or a requote date.
+model Task {
+  id          String    @id @default(cuid())
+  /// manual, renewal, cancel_notice, cancelled or requote.
+  kind        String    @default("manual")
+  title       String
+  dueOn       DateTime  @db.Date
+  assigneeId  String
+  assignee    User      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById String?
+  createdBy   User?     @relation("TaskCreator", fields: [createdById], references: [id])
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  policyId    String?
+  policy      Policy?   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  /// Set on tasks the hub makes, so the same renewal or notice never makes two.
+  autoKey     String?   @unique
+  doneAt      DateTime?
+  doneNote    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([assigneeId, doneAt, dueOn])
+  @@index([contactId])
 }

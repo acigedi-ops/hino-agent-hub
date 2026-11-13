@@ -5,6 +5,8 @@ import { STAGES, daysUntil, fmtDate, fmtMoney } from "@/lib/contacts";
 import { REQUIRED_AGENT_DOCS, docState, needsAction } from "@/lib/agent-docs";
 import { assistantEnabled } from "@/lib/assistant";
 import { unreadCount } from "@/lib/messages";
+import { syncAutoTasks, taskScope, today } from "@/lib/tasks";
+import { TaskRow } from "@/components/TaskRow";
 import { AssistantBox } from "@/components/AssistantBox";
 
 export default async function Home() {
@@ -27,6 +29,16 @@ export default async function Home() {
   const docsToDo = u.role === "AGENT" ? REQUIRED_AGENT_DOCS.filter((k) => needsAction(docState(myDocs, k))) : [];
   const docsToReview = u.role === "ADMIN" ? await db.agentDocument.count({ where: { status: "PENDING" } }) : 0;
   const unread = await unreadCount(u.id);
+  await syncAutoTasks();
+  const t = today();
+  const dueWhere = { ...taskScope(u), doneAt: null, dueOn: { lte: t } };
+  const [dueTasks, dueTotal] = await Promise.all([
+    db.task.findMany({
+      where: dueWhere, orderBy: [{ dueOn: "asc" }, { createdAt: "asc" }], take: 8,
+      include: { assignee: { select: { name: true } }, contact: { select: { id: true, fullName: true, phone: true } }, policy: { select: { premium: true, expirationDate: true } } },
+    }),
+    db.task.count({ where: dueWhere }),
+  ]);
   const count = (k: string) => byStage.find((b) => b.stage === k)?._count ?? 0;
 
   return (
@@ -51,6 +63,17 @@ export default async function Home() {
           {docsToReview} agent {docsToReview === 1 ? "document is" : "documents are"} waiting for your approval.
         </Link>
       )}
+
+      <section className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="h2">To do today{dueTotal ? ` (${dueTotal})` : ""}</h2>
+          <Link className="text-sm font-semibold underline" href="/tasks">All tasks</Link>
+        </div>
+        <div className="card p-0">
+          {dueTasks.length === 0 ? <p className="p-4 text-sm text-muted">Nothing due today.</p> : dueTasks.map((x) => <TaskRow key={x.id} t={x} today={t} showAgent={u.role === "ADMIN"} />)}
+          {dueTotal > dueTasks.length && <p className="border-t border-line p-3 text-sm"><Link className="font-semibold underline" href="/tasks">See the other {dueTotal - dueTasks.length}</Link></p>}
+        </div>
+      </section>
 
       <AssistantBox enabled={assistantEnabled()} firstName={u.name.split(" ")[0]} />
 

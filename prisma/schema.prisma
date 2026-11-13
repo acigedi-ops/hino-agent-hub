@@ -1,0 +1,334 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  AGENT
+}
+
+enum Stage {
+  APPLICANT
+  QUOTED
+  CLIENT
+  LOST
+  FORMER
+}
+
+enum QuoteType {
+  PERSONAL
+  COMMERCIAL
+}
+
+enum PolicyStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String
+  passwordHash String
+  role         Role       @default(AGENT)
+  active       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  sessions     Session[]
+  contacts     Contact[]
+  activities   Activity[]
+  documents    Document[]
+  imports      ReportImport[]
+  agentDocuments    AgentDocument[] @relation("AgentDocOwner")
+  reviewedDocuments AgentDocument[] @relation("AgentDocReviewer")
+  memberships       ConversationMember[]
+  messages          Message[]
+  referralSources   ReferralSource[]
+  tasks             Task[] @relation("TaskAssignee")
+  feesEarned        AgencyFee[] @relation("FeeAgent")
+  feesCreated       AgencyFee[] @relation("FeeCreator")
+  tasksCreated      Task[] @relation("TaskCreator")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Contact {
+  id          String     @id @default(cuid())
+  agentId     String
+  agent       User       @relation(fields: [agentId], references: [id])
+  stage       Stage      @default(APPLICANT)
+  type        QuoteType  @default(PERSONAL)
+  fullName    String
+  phone       String?
+  phoneNorm   String?
+  email       String?
+  emailNorm   String?
+  dob         DateTime?  @db.Date
+  address     String?
+  leadSource  String?
+  priority    String?
+  lostReason  String?
+  requoteDate DateTime?  @db.Date
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  intake      Intake?
+  policies    Policy[]
+  activities  Activity[]
+  documents   Document[]
+  /// Code this person shares with friends and family. Entered when a new applicant is added.
+  referralCode       String?   @unique
+  referredById       String?
+  referredBy         Contact?  @relation("Referral", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals          Contact[] @relation("Referral")
+  referredAt         DateTime?
+  /// When the owner sent the referrer their reward for this referral.
+  referralRewardedAt DateTime?
+  conversations      Conversation[]
+  tasks              Task[]
+  agencyFees         AgencyFee[]
+  /// A business that sent this person (dealership, lawyer...). Separate from a client's referral code.
+  referralSourceId   String?
+  referralSource     ReferralSource? @relation(fields: [referralSourceId], references: [id], onDelete: SetNull)
+
+  @@index([referredAt])
+  @@index([referralSourceId])
+  @@index([agentId, stage])
+  @@index([phoneNorm])
+  @@index([emailNorm])
+}
+
+model Intake {
+  id        String   @id @default(cuid())
+  contactId String   @unique
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Policy {
+  id             String       @id @default(cuid())
+  contactId      String
+  contact        Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  line           String
+  carrier        String
+  policyNumber   String
+  premium        Decimal      @db.Decimal(12, 2)
+  effectiveDate  DateTime     @db.Date
+  expirationDate DateTime     @db.Date
+  status         PolicyStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  /// The first effective date. A renewal moves effectiveDate forward but never this, so new business can be counted by month.
+  writtenDate    DateTime?    @db.Date
+  cancelledAt    DateTime?
+  tasks          Task[]
+
+  @@index([contactId])
+  @@index([expirationDate])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  kind      String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([contactId, createdAt])
+}
+
+/// A file attached to a contact (license, registration, declarations page). Bytes live in the database so they are
+/// covered by the same access rules and backups as the rest of the record.
+model Document {
+  id           String   @id @default(cuid())
+  contactId    String
+  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  kind         String
+  filename     String
+  mimeType     String
+  size         Int
+  data         Bytes
+  createdAt    DateTime @default(now())
+
+  @@index([contactId, createdAt])
+}
+
+/// One upload of an EZLynx report by the owner.
+model ReportImport {
+  id           String   @id @default(cuid())
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  filename     String
+  rows         Int
+  converted    Int
+  created      Int
+  updated      Int
+  skipped      Int
+  createdAt    DateTime @default(now())
+}
+
+enum DocStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// A compliance document an agent uploads about themselves (W-9, producer license) for the owner to approve.
+model AgentDocument {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation("AgentDocOwner", fields: [userId], references: [id], onDelete: Cascade)
+  kind         String
+  filename     String
+  mimeType     String
+  size         Int
+  data         Bytes
+  /// For a license: the date it expires.
+  expiresOn    DateTime? @db.Date
+  status       DocStatus @default(PENDING)
+  reviewNote   String?
+  reviewedById String?
+  reviewedBy   User?     @relation("AgentDocReviewer", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId, kind, createdAt])
+  @@index([status])
+}
+
+/// An internal message thread between hub users. Optionally about one contact.
+model Conversation {
+  id        String    @id @default(cuid())
+  subject   String
+  contactId String?
+  contact   Contact?  @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+  /// Time of the newest message, for sorting the inbox.
+  lastAt    DateTime  @default(now())
+  members   ConversationMember[]
+  messages  Message[]
+
+  @@index([lastAt])
+}
+
+model ConversationMember {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Messages newer than this are unread for this person.
+  lastReadAt     DateTime     @default(now())
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  body           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+/// A business or professional that sends the agency a lot of people: a dealership, a lawyer, a real estate agent.
+model ReferralSource {
+  id          String    @id @default(cuid())
+  name        String
+  kind        String
+  contactName String?
+  phone       String?
+  email       String?
+  address     String?
+  notes       String?
+  createdById String
+  createdBy   User      @relation(fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  contacts    Contact[]
+
+  @@index([name])
+}
+
+/// Something an agent has to do: a follow-up they wrote themselves, or one the hub made for a renewal, a cancel notice,
+/// a cancellation or a requote date.
+model Task {
+  id          String    @id @default(cuid())
+  /// manual, renewal, cancel_notice, cancelled or requote.
+  kind        String    @default("manual")
+  title       String
+  dueOn       DateTime  @db.Date
+  assigneeId  String
+  assignee    User      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  createdById String?
+  createdBy   User?     @relation("TaskCreator", fields: [createdById], references: [id])
+  contactId   String?
+  contact     Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  policyId    String?
+  policy      Policy?   @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  /// Set on tasks the hub makes, so the same renewal or notice never makes two.
+  autoKey     String?   @unique
+  doneAt      DateTime?
+  doneNote    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([assigneeId, doneAt, dueOn])
+  @@index([contactId])
+}
+
+enum FeeStatus {
+  PENDING
+  PAID
+  REFUNDED
+  VOID
+}
+
+/// An agency fee charged through a payment link. PENDING until the payment company reports it paid.
+model AgencyFee {
+  id          String    @id @default(cuid())
+  contactId   String
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  /// The agent credited with the fee.
+  agentId     String
+  agent       User      @relation("FeeAgent", fields: [agentId], references: [id])
+  createdById String?
+  createdBy   User?     @relation("FeeCreator", fields: [createdById], references: [id])
+  amount      Decimal   @db.Decimal(10, 2)
+  /// What the agent is paid for this fee. Stored per fee so the owner can adjust one without touching the rest.
+  agentShare  Decimal   @db.Decimal(10, 2)
+  status      FeeStatus @default(PENDING)
+  /// Where the client pays. Empty until the payment account is connected.
+  payLink     String?
+  /// The payment company's id for this charge.
+  externalId  String?   @unique
+  paidAt      DateTime?
+  /// When the owner paid the agent their share.
+  paidOutAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([contactId])
+  @@index([status])
+}

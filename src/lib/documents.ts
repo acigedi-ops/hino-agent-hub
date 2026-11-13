@@ -1,4 +1,15 @@
-export const DOC_KINDS = ["Driver's license", "Registration", "Insurance card", "Declarations page", "Signed form", "Other"];
+/** Every client file needs these four. Each has its own box on the client's page. */
+export const REQUIRED_DOCS = ["Agency fee receipt", "Signed dec page", "ID cards", "Signed fee disclosure"] as const;
+export const REQUIRED_DOC_HINTS: Record<(typeof REQUIRED_DOCS)[number], string> = {
+  "Agency fee receipt": "The receipt for the agency fee. The hub files it here when the fee is paid.",
+  "Signed dec page": "The declarations page signed by the client.",
+  "ID cards": "The insurance ID cards for each policy.",
+  "Signed fee disclosure": "The agency fee disclosure signed by the client.",
+};
+export const OTHER_DOC_KINDS = ["Driver's license", "Registration", "Signed form", "Other"];
+export const DOC_KINDS: string[] = [...REQUIRED_DOCS, ...OTHER_DOC_KINDS];
+/** Which of the required documents a file is still missing, given the kinds it has. */
+export const missingDocs = (kinds: Iterable<string>) => { const have = new Set(kinds); return REQUIRED_DOCS.filter((k) => !have.has(k)); };
 export const MAX_DOC_BYTES = 10 * 1024 * 1024;
 
 /** File types the hub accepts, keyed by MIME type. Anything else is refused. */

@@ -15,6 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/pipeline", label: "Applicants" },
     { href: "/clients", label: "Clients" },
     ...(u.role === "ADMIN" ? [{ href: "/admin/scoreboard", label: "Scoreboard" }, { href: "/admin/import", label: "Policy report" }, { href: "/admin/referrals", label: "Referrals" }, { href: "/admin/agents", label: "Agents" }, { href: "/admin/documents", label: "Agent documents" }] : []),
+    { href: "/fees", label: "Agency fee" },
     { href: "/sources", label: "Referral sources" },
     { href: "/documents", label: "My documents" },
     { href: "/account", label: "My account" },

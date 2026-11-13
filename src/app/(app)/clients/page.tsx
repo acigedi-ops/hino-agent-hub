@@ -2,10 +2,11 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { POLICY_LINES, fmtDate, fmtMoney } from "@/lib/contacts";
+import { REQUIRED_DOCS, missingDocs } from "@/lib/documents";
 import { StageBadge } from "@/components/StageBadge";
 import { sortClients, type ClientRow, type SortKey, SORT_KEYS } from "@/lib/clients";
 
-type Params = { q?: string; agent?: string; type?: string; status?: string; line?: string; sort?: string; dir?: string };
+type Params = { files?: string; q?: string; agent?: string; type?: string; status?: string; line?: string; sort?: string; dir?: string };
 
 export default async function Clients({ searchParams }: { searchParams: Promise<Params> }) {
   const u = await requireUser();
@@ -29,11 +30,13 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
         { policies: { some: { OR: [{ policyNumber: { contains: q, mode: "insensitive" as const } }, { carrier: { contains: q, mode: "insensitive" as const } }] } } },
       ] } : {}),
     },
-    include: { agent: true, policies: { orderBy: { expirationDate: "asc" } } },
+    include: { agent: true, policies: { orderBy: { expirationDate: "asc" } }, documents: { where: { kind: { in: [...REQUIRED_DOCS] } }, select: { kind: true } } },
     take: 2000,
   });
 
-  const rows: ClientRow[] = found.map((c) => {
+  const missingById = new Map(found.map((c) => [c.id, missingDocs(c.documents.map((d) => d.kind))]));
+  const incomplete = found.filter((c) => missingById.get(c.id)!.length).length;
+  const rows: ClientRow[] = found.filter((c) => sp.files !== "missing" || missingById.get(c.id)!.length).map((c) => {
     const active = c.policies.filter((p) => p.status === "ACTIVE");
     const shown = active.length ? active : c.policies;
     return {
@@ -62,8 +65,8 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <h1 className="h1">{u.role === "ADMIN" ? "All clients" : "My clients"}</h1>
-      <div className="grid grid-cols-3 gap-3">
-        {[["Shown", rows.length], ["Active policies", rows.reduce((n, r) => n + r.policies, 0)], ["Premium in force", fmtMoney(rows.reduce((n, r) => n + r.premium, 0))]].map(([l, v]) => (
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {[["Shown", rows.length], ["Active policies", rows.reduce((n, r) => n + r.policies, 0)], ["Premium in force", fmtMoney(rows.reduce((n, r) => n + r.premium, 0))], ["Files missing a document", incomplete]].map(([l, v]) => (
           <div key={l} className="card"><div className="text-xl font-bold">{v}</div><div className="text-xs font-semibold uppercase tracking-wide text-muted">{l}</div></div>
         ))}
       </div>
@@ -77,6 +80,9 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
         </select>
         <select className="input max-w-44" name="line" defaultValue={sp.line ?? ""} aria-label="Policy line">
           <option value="">All lines</option>{POLICY_LINES.map((l) => <option key={l}>{l}</option>)}
+        </select>
+        <select className="input max-w-44" name="files" defaultValue={sp.files ?? ""} aria-label="Files">
+          <option value="">All files</option><option value="missing">Missing a document</option>
         </select>
         {u.role === "ADMIN" && (
           <select className="input max-w-48" name="agent" defaultValue={sp.agent ?? ""} aria-label="Agent">
@@ -93,7 +99,7 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
           <table className="w-full">
             <thead><tr className="border-b border-line">
               {head("name", "Client")}{head("status", "Status")}{head("type", "Type")}<th className="th">Phone</th><th className="th">Carriers</th>
-              {head("premium", "Premium")}{head("effective", "Effective")}{head("renewal", "Next renewal")}{u.role === "ADMIN" && head("agent", "Agent")}
+              {head("premium", "Premium")}{head("effective", "Effective")}{head("renewal", "Next renewal")}<th className="th">File</th>{u.role === "ADMIN" && head("agent", "Agent")}
             </tr></thead>
             <tbody>
               {rows.map((c) => (
@@ -106,6 +112,7 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
                   <td className="td">{fmtMoney(c.premium)}</td>
                   <td className="td whitespace-nowrap">{fmtDate(c.effective)}</td>
                   <td className="td whitespace-nowrap">{fmtDate(c.renewal)}</td>
+                  <td className="td text-xs">{missingById.get(c.id)!.length === 0 ? <span className="font-semibold text-green-800">Complete</span> : <span className="font-semibold text-red-700" title={missingById.get(c.id)!.join(", ")}>Missing {missingById.get(c.id)!.length}: {missingById.get(c.id)!.join(", ")}</span>}</td>
                   {u.role === "ADMIN" && <td className="td">{c.agent}</td>}
                 </tr>
               ))}

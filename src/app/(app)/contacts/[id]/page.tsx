@@ -5,10 +5,11 @@ import { contactScope, requireUser } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
 import { addNote, addPolicy, addTask, deleteDocument, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
 import { showCode } from "@/lib/referrals";
-import { DOC_KINDS, fmtSize } from "@/lib/documents";
+import { OTHER_DOC_KINDS, REQUIRED_DOCS, REQUIRED_DOC_HINTS, fmtSize, missingDocs } from "@/lib/documents";
 import { ActionForm } from "@/components/ActionForm";
 import { TaskRow } from "@/components/TaskRow";
 import { today } from "@/lib/tasks";
+import { FEE_STATUS } from "@/lib/fees";
 import { StageBadge } from "@/components/StageBadge";
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +20,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     include: {
       agent: true, intake: { select: { updatedAt: true } },
       tasks: { where: { OR: [{ doneAt: null }, { doneAt: { gte: new Date(Date.now() - 30 * 864e5) } }] }, orderBy: [{ doneAt: { sort: "desc", nulls: "first" } }, { dueOn: "asc" }], take: 30, include: { assignee: { select: { name: true } }, policy: { select: { premium: true, expirationDate: true } } } },
+      agencyFees: { orderBy: { createdAt: "desc" } },
       referralSource: { select: { id: true, name: true, kind: true } },
       referredBy: { select: { id: true, fullName: true, agentId: true } },
       referrals: { select: { id: true, fullName: true, stage: true, agentId: true, referredAt: true, referralRewardedAt: true }, orderBy: { referredAt: "desc" } },
@@ -31,6 +33,19 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   const agents = u.role === "ADMIN" ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
   const sources = await db.referralSource.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, kind: true } });
   const isClient = c.stage === "CLIENT";
+  const missing = missingDocs(c.documents.map((d) => d.kind));
+  const others = c.documents.filter((d) => !(REQUIRED_DOCS as readonly string[]).includes(d.kind));
+  const docRow = (d: (typeof c.documents)[number]) => (
+    <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2 first:border-0 first:pt-0">
+      <div className="min-w-0 text-sm">
+        <a className="font-semibold underline" href={`/contacts/${c.id}/documents/${d.id}`} target="_blank">{d.kind}</a>
+        <div className="truncate text-xs text-muted">{d.filename} · {fmtSize(d.size)} · {d.uploadedBy.name} · {fmtDate(d.createdAt)}</div>
+      </div>
+      {u.role === "ADMIN" && (
+        <ActionForm action={deleteDocument} submit="Delete" buttonClass="btn-quiet"><input type="hidden" name="documentId" value={d.id} /></ActionForm>
+      )}
+    </div>
+  );
   /** Referrals cross agents, so only link to a contact this person is allowed to open. */
   const see = (agentId: string) => u.role === "ADMIN" || agentId === u.id;
 
@@ -123,6 +138,24 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             </div>
           </section>
           <section className="space-y-2">
+            <h2 className="h2">Agency fee</h2>
+            <div className="card space-y-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="max-w-xs text-muted">Have the client sign the fee disclosure, then create the payment link.</p>
+                <div className="flex flex-wrap gap-2">
+                  <a className="btn-quiet" href={`/contacts/${c.id}/fee-disclosure`} target="_blank">Print fee disclosure</a>
+                  <Link className="btn-gold" href={`/fees?contact=${c.id}`}>Create fee link</Link>
+                </div>
+              </div>
+              {c.agencyFees.map((fee) => (
+                <div key={fee.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
+                  <Link className="underline" href={`/fees?fee=${fee.id}`}>{fmtMoney(Number(fee.amount))} · {(fee.paidAt ?? fee.createdAt).toLocaleDateString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric" })}</Link>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${FEE_STATUS[fee.status][1]}`}>{FEE_STATUS[fee.status][0]}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+          <section className="space-y-2">
             <h2 className="h2">Referrals</h2>
             <div className="card space-y-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -168,26 +201,36 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             </div>
           </section>
           <section className="space-y-2">
-            <h2 className="h2">Documents</h2>
-            <div className="card space-y-3">
-              {c.documents.length === 0 && <p className="text-sm text-muted">No documents yet. Licenses, registrations and other files for this contact are kept here.</p>}
-              {c.documents.map((d) => (
-                <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2 last:border-0 last:pb-0">
-                  <div className="min-w-0 text-sm">
-                    <a className="font-semibold underline" href={`/contacts/${c.id}/documents/${d.id}`} target="_blank">{d.kind}</a>
-                    <div className="truncate text-xs text-muted">{d.filename} · {fmtSize(d.size)} · {d.uploadedBy.name} · {fmtDate(d.createdAt)}</div>
-                  </div>
-                  {u.role === "ADMIN" && (
-                    <ActionForm action={deleteDocument} submit="Delete" buttonClass="btn-quiet">
-                      <input type="hidden" name="documentId" value={d.id} />
+            <h2 className="h2">Required documents{missing.length ? ` (${missing.length} missing)` : ""}</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {REQUIRED_DOCS.map((kind, i) => {
+                const files = c.documents.filter((d) => d.kind === kind);
+                return (
+                  <div key={kind} className={`card space-y-2 ${files.length ? "" : "border-red-300"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-semibold">{kind}</div>
+                      <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${files.length ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>{files.length ? "On file" : "Missing"}</span>
+                    </div>
+                    <p className="text-xs text-muted">{REQUIRED_DOC_HINTS[kind]}</p>
+                    {files.map((d) => docRow(d))}
+                    <ActionForm action={uploadDocument} submit={files.length ? "Add another" : "Upload"} className="space-y-2 border-t border-line pt-2" buttonClass="btn-quiet">
+                      <input type="hidden" name="contactId" value={c.id} /><input type="hidden" name="kind" value={kind} />
+                      <input className="input" id={`req-file-${i}`} name="file" type="file" aria-label={`${kind} file`} accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" required />
                     </ActionForm>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+          <section className="space-y-2">
+            <h2 className="h2">Other documents</h2>
+            <div className="card space-y-3">
+              {others.length === 0 && <p className="text-sm text-muted">Licenses, registrations and any other files for this person go here.</p>}
+              {others.map((d) => docRow(d))}
               <ActionForm action={uploadDocument} submit="Upload" className="flex flex-wrap items-end gap-2 border-t border-line pt-3" buttonClass="btn-quiet">
                 <input type="hidden" name="contactId" value={c.id} />
                 <div><label className="label" htmlFor="doc-kind">Type</label>
-                  <select className="input" id="doc-kind" name="kind">{DOC_KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
+                  <select className="input" id="doc-kind" name="kind">{OTHER_DOC_KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
                 <div className="min-w-0 flex-1"><label className="label" htmlFor="doc-file">File (PDF or photo, up to 10 MB)</label>
                   <input className="input" id="doc-file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" required /></div>
               </ActionForm>

@@ -11,6 +11,7 @@ import { lookupVin } from "@/lib/vin";
 import { AGENT_DOC_KINDS } from "@/lib/agent-docs";
 import { MAX_BODY, MAX_SUBJECT, replyTo, startConversation } from "@/lib/messages";
 import { addDays, settleTasks, syncAutoTasks, taskScope, today } from "@/lib/tasks";
+import { AGENCY_FEE, AGENT_SHARE, FEE_METHODS } from "@/lib/fees";
 import type { FormState } from "@/components/ActionForm";
 
 const s = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
@@ -459,4 +460,57 @@ export async function snoozeTask(_: FormState, f: FormData): Promise<FormState> 
   await db.task.update({ where: { id: t.id }, data: { dueOn: addDays(today(), days) } });
   revalidatePath("/", "layout");
   return {};
+}
+
+// ---------- agency fees ----------
+
+/** The agent logs that the fee was collected. It counts toward their payout once the owner confirms the money arrived. */
+export async function recordAgencyFee(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const c = await ownedContact(u, s(f, "contactId"));
+  const method = s(f, "method");
+  if (!FEE_METHODS.includes(method)) return { error: "Pick how the client paid." };
+  const collectedOn = parseDate(s(f, "collectedOn")) ?? today();
+  if (collectedOn > addDays(today(), 1)) return { error: "The date collected cannot be in the future." };
+  // Guards against a double click or logging the same payment twice on one day.
+  const same = await db.agencyFee.findFirst({ where: { contactId: c.id, collectedOn, status: { in: ["PENDING", "PAID"] } } });
+  if (same && s(f, "again") !== "yes") return { error: "A fee is already logged for this person on that date. Tick the box to log a second one." };
+  const admin = u.role === "ADMIN";
+  await db.agencyFee.create({
+    data: {
+      contactId: c.id, agentId: c.agentId, amount: AGENCY_FEE, agentShare: AGENT_SHARE, method, collectedOn, note: s(f, "note").slice(0, 300) || null,
+      ...(admin ? { status: "PAID" as const, confirmedById: u.id, confirmedAt: new Date() } : {}),
+    },
+  });
+  await log(c.id, u.id, "fee", `Agency fee $${AGENCY_FEE} logged (${method})${admin ? " and confirmed" : ""}`);
+  revalidatePath("/", "layout");
+  return { ok: admin ? "Fee logged and confirmed." : "Fee logged. It counts once the owner confirms it." };
+}
+
+/** Owner only: confirm the money arrived, mark it not received, or refund it. */
+export async function reviewAgencyFee(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireAdmin();
+  const fee = await db.agencyFee.findUnique({ where: { id: s(f, "feeId") } });
+  const to = s(f, "to");
+  if (!fee || !["PAID", "VOID", "REFUNDED"].includes(to)) return { error: "Fee not found." };
+  if (to === "REFUNDED" && fee.status !== "PAID") return { error: "Only a confirmed fee can be refunded." };
+  if (to !== "REFUNDED" && fee.status !== "PENDING") return { error: "This fee was already reviewed." };
+  await db.agencyFee.update({ where: { id: fee.id }, data: { status: to as "PAID" | "VOID" | "REFUNDED", confirmedById: u.id, confirmedAt: new Date() } });
+  await log(fee.contactId, u.id, "fee", `Agency fee ${to === "PAID" ? "confirmed" : to === "VOID" ? "marked not received" : "refunded"}`);
+  revalidatePath("/", "layout");
+  return {};
+}
+
+/** Owner only: mark an agent's confirmed fees for a month as paid out to them. */
+export async function markFeesPaidOut(_: FormState, f: FormData): Promise<FormState> {
+  await requireAdmin();
+  const month = s(f, "month");
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return { error: "Pick a month." };
+  const [y, m] = month.split("-").map(Number);
+  const res = await db.agencyFee.updateMany({
+    where: { agentId: s(f, "agentId"), status: "PAID", paidOutAt: null, collectedOn: { gte: new Date(Date.UTC(y, m - 1, 1)), lt: new Date(Date.UTC(y, m, 1)) } },
+    data: { paidOutAt: new Date() },
+  });
+  revalidatePath("/fees");
+  return { ok: `${res.count} marked as paid to the agent.` };
 }

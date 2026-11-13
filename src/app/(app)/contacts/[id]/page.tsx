@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
-import { addNote, addPolicy, addTask, deleteDocument, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
+import { addNote, addPolicy, addTask, recordAgencyFee, deleteDocument, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
 import { showCode } from "@/lib/referrals";
 import { DOC_KINDS, fmtSize } from "@/lib/documents";
 import { ActionForm } from "@/components/ActionForm";
 import { TaskRow } from "@/components/TaskRow";
 import { today } from "@/lib/tasks";
+import { AGENCY_FEE, FEE_DISCLOSURE_KIND, FEE_METHODS, FEE_STATUS } from "@/lib/fees";
 import { StageBadge } from "@/components/StageBadge";
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,6 +20,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     include: {
       agent: true, intake: { select: { updatedAt: true } },
       tasks: { where: { OR: [{ doneAt: null }, { doneAt: { gte: new Date(Date.now() - 30 * 864e5) } }] }, orderBy: [{ doneAt: { sort: "desc", nulls: "first" } }, { dueOn: "asc" }], take: 30, include: { assignee: { select: { name: true } }, policy: { select: { premium: true, expirationDate: true } } } },
+      agencyFees: { orderBy: { collectedOn: "desc" } },
       referralSource: { select: { id: true, name: true, kind: true } },
       referredBy: { select: { id: true, fullName: true, agentId: true } },
       referrals: { select: { id: true, fullName: true, stage: true, agentId: true, referredAt: true, referralRewardedAt: true }, orderBy: { referredAt: "desc" } },
@@ -120,6 +122,34 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   </div>
                 </ActionForm>
               </details>}
+            </div>
+          </section>
+          <section className="space-y-2">
+            <h2 className="h2">Agency fee</h2>
+            <div className="card space-y-3 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="max-w-sm text-muted">All new business is charged a ${AGENCY_FEE} agency fee. Have the client sign the disclosure first, then upload the signed copy under Documents.</p>
+                <a className="btn-quiet" href={`/contacts/${c.id}/fee-disclosure`} target="_blank">Print fee disclosure</a>
+              </div>
+              {!c.documents.some((d) => d.kind === FEE_DISCLOSURE_KIND) && <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-900">No signed fee disclosure is on file yet.</p>}
+              {c.agencyFees.map((fee) => (
+                <div key={fee.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2">
+                  <span>{fmtMoney(Number(fee.amount))} · {fee.method} · {fmtDate(fee.collectedOn)}{fee.note ? ` · ${fee.note}` : ""}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${FEE_STATUS[fee.status][1]}`}>{FEE_STATUS[fee.status][0]}</span>
+                </div>
+              ))}
+              <ActionForm action={recordAgencyFee} submit={`Log $${AGENCY_FEE} fee collected`} className="space-y-2 border-t border-line pt-3" buttonClass="btn-quiet">
+                <input type="hidden" name="contactId" value={c.id} />
+                <div className="flex flex-wrap items-end gap-2">
+                  <div><label className="label" htmlFor="feeMethod">Paid by</label>
+                    <select className="input" id="feeMethod" name="method">{FEE_METHODS.map((m) => <option key={m}>{m}</option>)}</select></div>
+                  <div><label className="label" htmlFor="feeDate">Date collected</label><input className="input" id="feeDate" name="collectedOn" type="date" defaultValue={today().toISOString().slice(0, 10)} /></div>
+                  <div className="min-w-0 flex-1 basis-32"><label className="label" htmlFor="feeNote">Note</label><input className="input" id="feeNote" name="note" maxLength={300} placeholder="Receipt or check number" /></div>
+                </div>
+                {c.agencyFees.some((x) => x.status === "PENDING" || x.status === "PAID") && (
+                  <label className="flex items-center gap-2 text-xs text-muted"><input type="checkbox" name="again" value="yes" /> This is another fee for a second new policy</label>
+                )}
+              </ActionForm>
             </div>
           </section>
           <section className="space-y-2">

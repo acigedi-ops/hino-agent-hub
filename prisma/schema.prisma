@@ -50,6 +50,8 @@ model User {
   messages          Message[]
   referralSources   ReferralSource[]
   tasks             Task[] @relation("TaskAssignee")
+  feesEarned        AgencyFee[] @relation("FeeAgent")
+  feesConfirmed     AgencyFee[] @relation("FeeConfirmer")
   tasksCreated      Task[] @relation("TaskCreator")
 }
 
@@ -97,6 +99,7 @@ model Contact {
   referralRewardedAt DateTime?
   conversations      Conversation[]
   tasks              Task[]
+  agencyFees         AgencyFee[]
   /// A business that sent this person (dealership, lawyer...). Separate from a client's referral code.
   referralSourceId   String?
   referralSource     ReferralSource? @relation(fields: [referralSourceId], references: [id], onDelete: SetNull)
@@ -293,4 +296,41 @@ model Task {
 
   @@index([assigneeId, doneAt, dueOn])
   @@index([contactId])
+}
+
+enum FeeStatus {
+  PENDING
+  PAID
+  REFUNDED
+  VOID
+}
+
+/// The agency fee charged on new business. The agent logs it, the owner confirms the money arrived, and the agent is
+/// paid their share at month end.
+model AgencyFee {
+  id            String    @id @default(cuid())
+  contactId     String
+  contact       Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  /// The agent credited with the fee.
+  agentId       String
+  agent         User      @relation("FeeAgent", fields: [agentId], references: [id])
+  amount        Decimal   @db.Decimal(10, 2)
+  /// What the agent is paid for this fee. Stored per fee so a later change to the rate leaves old months alone.
+  agentShare    Decimal   @db.Decimal(10, 2)
+  method        String
+  collectedOn   DateTime  @db.Date
+  note          String?
+  status        FeeStatus @default(PENDING)
+  confirmedById String?
+  confirmedBy   User?     @relation("FeeConfirmer", fields: [confirmedById], references: [id])
+  confirmedAt   DateTime?
+  /// When the owner paid the agent their share.
+  paidOutAt     DateTime?
+  /// The payment company's id for this charge, once online payments are connected.
+  externalId    String?   @unique
+  createdAt     DateTime  @default(now())
+
+  @@index([agentId, collectedOn])
+  @@index([contactId])
+  @@index([status])
 }

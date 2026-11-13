@@ -1,4 +1,4 @@
-export const DOC_KINDS = ["Driver's license", "Registration", "Insurance card", "Declarations page", "Signed form", "Other"];
+export const DOC_KINDS = ["Driver's license", "Registration", "Insurance card", "Declarations page", "Agency fee disclosure (signed)", "Signed form", "Other"];
 export const MAX_DOC_BYTES = 10 * 1024 * 1024;
 
 /** File types the hub accepts, keyed by MIME type. Anything else is refused. */

@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { unreadCount } from "@/lib/messages";
 import { dueCount } from "@/lib/tasks";
@@ -7,7 +8,7 @@ import { logoutAction } from "@/app/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser();
-  const [unread, due] = await Promise.all([unreadCount(u.id), dueCount(u)]);
+  const [unread, due, feesToConfirm] = await Promise.all([unreadCount(u.id), dueCount(u), u.role === "ADMIN" ? db.agencyFee.count({ where: { status: "PENDING" } }) : 0]);
   const nav: { href: string; label: string; badge?: number }[] = [
     { href: "/", label: "Home" },
     { href: "/tasks", label: "Tasks", badge: due },
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/pipeline", label: "Applicants" },
     { href: "/clients", label: "Clients" },
     ...(u.role === "ADMIN" ? [{ href: "/admin/scoreboard", label: "Scoreboard" }, { href: "/admin/import", label: "Policy report" }, { href: "/admin/referrals", label: "Referrals" }, { href: "/admin/agents", label: "Agents" }, { href: "/admin/documents", label: "Agent documents" }] : []),
+    { href: "/fees", label: "Agency fees", badge: feesToConfirm },
     { href: "/sources", label: "Referral sources" },
     { href: "/documents", label: "My documents" },
     { href: "/account", label: "My account" },
@@ -26,7 +28,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/"><Image src="/brand/rhino-logo-cropped.png" alt="Rhino Insurance" width={90} height={80} priority className="h-12 w-auto md:h-20" /></Link>
           <nav className="flex flex-wrap gap-1 md:mt-6 md:flex-col">
             {nav.map((n) => (
-              <Link key={n.href} href={n.href} className="rounded-md px-3 py-2 text-sm font-medium text-white/85 hover:bg-white/10 hover:text-gold">{n.label}{n.badge ? <span className="ml-2 rounded-full bg-gold px-1.5 py-0.5 text-xs font-bold text-ink" aria-label={`${n.badge} ${n.href === "/tasks" ? "due" : "unread"}`}>{n.badge}</span> : null}</Link>
+              <Link key={n.href} href={n.href} className="rounded-md px-3 py-2 text-sm font-medium text-white/85 hover:bg-white/10 hover:text-gold">{n.label}{n.badge ? <span className="ml-2 rounded-full bg-gold px-1.5 py-0.5 text-xs font-bold text-ink" aria-label={`${n.badge} ${n.href === "/tasks" ? "due" : n.href === "/fees" ? "to confirm" : "unread"}`}>{n.badge}</span> : null}</Link>
             ))}
           </nav>
         </div>

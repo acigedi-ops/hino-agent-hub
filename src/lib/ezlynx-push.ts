@@ -60,7 +60,7 @@ export function intakeNotes(d: IntakeData | null, agent: string, createdAt?: Dat
   const t = d.text;
   if (t.current_carrier) lines.push(`Current carrier: ${t.current_carrier}${t.expiration_date ? `, expires ${t.expiration_date}` : ""}${t.how_long_insured ? `, insured ${t.how_long_insured}` : ""}`);
   if (d.choice.housing) lines.push(`Housing: ${d.choice.housing}`);
-  const drivers = d.drivers.filter((r) => r.name).map((r) => [r.name, r.dob && `born ${r.dob}`, r.relationship, r.marital].filter(Boolean).join(", "));
+  const drivers = d.drivers.filter((r) => r.name).map((r) => [r.name, r.dob && `born ${r.dob}`, r.relationship, r.marital, r.occupation && `occupation ${r.occupation}`].filter(Boolean).join(", "));
   if (drivers.length) lines.push(`Drivers: ${drivers.join("; ")}`);
   const vehicles = d.vehicles.filter((r) => r.vin || r.make).map((r) => [[r.year, r.make, r.model].filter(Boolean).join(" "), r.vin && `VIN ${r.vin}`, r.ownership].filter(Boolean).join(", "));
   if (vehicles.length) lines.push(`Vehicles: ${vehicles.join("; ")}`);

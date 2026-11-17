@@ -16,6 +16,10 @@ export const TEXT_FIELDS = [
   "eld_provider", "trailer_equipment", "notes",
 ] as const;
 
+/** Asked on the form but not boxes of their own on the PDF: they print at the end of the Address 2 line. */
+export const EXTRA_TEXT_FIELDS = ["city", "state", "zip"] as const;
+export const ALL_TEXT_FIELDS = [...TEXT_FIELDS, ...EXTRA_TEXT_FIELDS] as const;
+
 /** Single-choice groups: form key -> option value -> PDF checkbox name. */
 export const CHOICES = {
   priority: { High: "priority_high", Normal: "priority_normal", Low: "priority_low" },
@@ -40,7 +44,7 @@ const rec = <K extends string>(keys: readonly K[]) =>
   z.object(Object.fromEntries(keys.map((k) => [k, str])) as Record<K, typeof str>);
 
 export const intakeSchema = z.object({
-  text: rec(TEXT_FIELDS).extend({ notes: z.string().trim().max(2000).default("") }),
+  text: rec(ALL_TEXT_FIELDS).extend({ notes: z.string().trim().max(2000).default("") }),
   choice: z.object(
     Object.fromEntries(Object.keys(CHOICES).map((k) => [k, str])) as Record<keyof typeof CHOICES, typeof str>,
   ),

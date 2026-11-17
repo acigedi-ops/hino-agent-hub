@@ -6,6 +6,8 @@ import { normalizeEmail, normalizePhone, parseDate, stageLabel } from "@/lib/con
 import { intakeSchema, isValidVin, type IntakeData } from "@/lib/intake";
 import { cleanCode, newReferralCode } from "@/lib/referrals";
 import { DOC_KINDS, DOC_TYPES, MAX_DOC_BYTES, sniffMatches } from "@/lib/documents";
+import { addressLine, cleanState, cleanZip } from "@/lib/ezlynx-push";
+import { pushDocumentsQuietly, pushQuietly, type PushResult } from "@/lib/ezlynx-sync";
 
 /** The work behind the forms, shared with the assistant so both follow the same rules. */
 
@@ -19,7 +21,7 @@ export async function findDuplicate(phoneNorm: string | null, emailNorm: string 
   return db.contact.findFirst({ where: { OR: or, NOT: exceptId ? { id: exceptId } : undefined }, include: { agent: true } });
 }
 
-export type NewContact = { fullName: string; phone?: string; email?: string; type?: string; leadSource?: string; priority?: string; agentId?: string; referralCode?: string; referralSourceId?: string };
+export type NewContact = { fullName: string; phone?: string; email?: string; type?: string; leadSource?: string; priority?: string; agentId?: string; referralCode?: string; referralSourceId?: string; street?: string; city?: string; state?: string; zip?: string };
 
 /** Finds whose referral code this is. Codes work across all agents, since a client may refer someone to a different agent. */
 export async function findReferrer(code: string) {
@@ -45,6 +47,11 @@ export async function createContactCore(u: SessionUser, n: NewContact, opts: { a
     };
   }
 
+  const street = (n.street ?? "").trim(), city = (n.city ?? "").trim();
+  if (n.state?.trim() && !cleanState(n.state)) return { error: "Enter the state as two letters, for example WA." };
+  if (n.zip?.trim() && !cleanZip(n.zip)) return { error: "Enter a 5 digit zip code." };
+  const state = cleanState(n.state), zip = cleanZip(n.zip);
+
   const referrer = n.referralCode?.trim() ? await findReferrer(n.referralCode) : null;
   if (n.referralCode?.trim() && !referrer) return { error: "No one in the hub has that referral code. Check it with the person, or leave it empty." };
 
@@ -65,20 +72,25 @@ export async function createContactCore(u: SessionUser, n: NewContact, opts: { a
       referralSourceId: source?.id ?? null,
       priority: ["High", "Normal", "Low"].includes(n.priority ?? "") ? n.priority : null,
       referralCode: newReferralCode(),
+      street: street || null, city: city || null, state, zip, address: addressLine({ street, city, state, zip }),
       ...(referrer ? { referredById: referrer.id, referredAt: new Date() } : {}),
     },
   });
   await logActivity(contact.id, u.id, "created", referrer ? `Applicant added. Referred by ${referrer.fullName}` : "Applicant added");
   if (source) await logActivity(contact.id, u.id, "referral", `Sent by ${source.name}`);
   if (referrer) await logActivity(referrer.id, u.id, "referral", `Referred ${fullName}`);
+  await pushQuietly(contact.id, u.id);
   return { contact };
 }
 
-export async function saveIntakeCore(u: SessionUser, c: Contact, raw: unknown, note = "Intake form saved"): Promise<{ error: string } | { data: IntakeData }> {
+export async function saveIntakeCore(u: SessionUser, c: Contact, raw: unknown, note = "Intake form saved"): Promise<{ error: string } | { data: IntakeData; ezlynx: PushResult | null }> {
   const parsed = intakeSchema.safeParse(raw);
   if (!parsed.success) return { error: "Some fields are too long or invalid. Check the form and try again." };
   const d = parsed.data;
   if (d.text.full_name.length < 2) return { error: "Enter the applicant's full name." };
+  if (d.text.state && !cleanState(d.text.state)) return { error: "Enter the state as two letters, for example WA." };
+  if (d.text.zip && !cleanZip(d.text.zip)) return { error: "Enter a 5 digit zip code." };
+  d.text.state = cleanState(d.text.state) ?? "";
   const badVin = d.vehicles.find((v) => v.vin && !isValidVin(v.vin));
   if (badVin) return { error: `VIN ${badVin.vin} is not valid. A VIN has 17 characters and never uses I, O or Q.` };
 
@@ -96,7 +108,8 @@ export async function saveIntakeCore(u: SessionUser, c: Contact, raw: unknown, n
         phone: d.text.phone1 || null, phoneNorm,
         email: d.text.email || null, emailNorm,
         dob: parseDate(d.text.dob),
-        address: [d.text.address1, d.text.address2].filter(Boolean).join(", ") || null,
+        street: d.text.address1 || null, street2: d.text.address2 || null, city: d.text.city || null, state: d.text.state || null, zip: d.text.zip || null,
+        address: addressLine({ street: d.text.address1, street2: d.text.address2, city: d.text.city, state: d.text.state, zip: d.text.zip }),
         type: d.choice.type === "Commercial" ? "COMMERCIAL" : "PERSONAL",
         leadSource: d.text.lead_source || null,
         priority: d.choice.priority || null,
@@ -104,7 +117,7 @@ export async function saveIntakeCore(u: SessionUser, c: Contact, raw: unknown, n
     }),
   ]);
   await logActivity(c.id, u.id, "intake", note);
-  return { data: d };
+  return { data: d, ezlynx: await pushQuietly(c.id, u.id) };
 }
 
 export type Upload = { name: string; type: string; data: Uint8Array<ArrayBuffer> };
@@ -126,5 +139,6 @@ export async function saveDocumentCore(u: SessionUser, contactId: string, f: Upl
     select: { id: true },
   });
   await logActivity(contactId, u.id, "document", `Document added: ${kind} (${filename})`);
+  await pushDocumentsQuietly(contactId);
   return { id: doc.id, kind, filename };
 }

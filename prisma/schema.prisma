@@ -38,6 +38,8 @@ model User {
   passwordHash String
   role         Role       @default(AGENT)
   active       Boolean    @default(true)
+  /// This person's EZLynx login name, so applicants sent to EZLynx land under them.
+  ezlynxUsername String?
   createdAt    DateTime   @default(now())
   sessions     Session[]
   contacts     Contact[]
@@ -79,6 +81,18 @@ model Contact {
   emailNorm   String?
   dob         DateTime?  @db.Date
   address     String?
+  /// Address parts. EZLynx needs street, city, state and zip separately; `address` stays the one-line display form.
+  street      String?
+  street2     String?
+  city        String?
+  state       String?
+  zip         String?
+  /// When this person was handed to Zapier to be created in EZLynx. Set once, so nobody is sent twice.
+  ezlynxSentAt DateTime?
+  /// Why the last attempt to send failed, if it did.
+  ezlynxError  String?
+  /// When the filled intake PDF was handed to Zapier for this person's Documents in EZLynx.
+  ezlynxIntakeSentAt DateTime?
   leadSource  String?
   priority    String?
   lostReason  String?
@@ -168,6 +182,8 @@ model Document {
   size         Int
   data         Bytes
   createdAt    DateTime @default(now())
+  /// When this file was handed to Zapier to be copied into the person's Documents in EZLynx.
+  ezlynxSentAt DateTime?
 
   @@index([contactId, createdAt])
 }

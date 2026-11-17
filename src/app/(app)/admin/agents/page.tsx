@@ -9,6 +9,7 @@ export default async function Agents() {
   return (
     <div className="space-y-6">
       <h1 className="h1">Agents</h1>
+      <p className="text-sm text-muted">The EZLynx username is the name each person signs in to EZLynx with. Applicants sent to EZLynx are assigned to it. Left empty, they land under the owner&apos;s EZLynx login.</p>
       <div className="card overflow-x-auto p-0">
         <table className="w-full">
           <thead><tr className="border-b border-line">
@@ -22,6 +23,7 @@ export default async function Agents() {
                     <input type="hidden" name="userId" value={a.id} />
                     <input className="input w-44 font-semibold" name="name" defaultValue={a.name} aria-label={`Name of ${a.name}`} required />
                     <input className="input w-56" name="email" type="email" defaultValue={a.email} aria-label={`Email of ${a.name}`} required />
+                    <input className="input w-44" name="ezlynxUsername" defaultValue={a.ezlynxUsername ?? ""} placeholder="EZLynx username" aria-label={`EZLynx username of ${a.name}`} autoComplete="off" />
                   </ActionForm>
                 </td>
                 <td className="td">{a.role === "ADMIN" ? "Owner" : "Agent"}</td>

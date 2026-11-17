@@ -19,6 +19,7 @@ export default async function IntakePage({ params }: { params: Promise<{ id: str
         ...data.text,
         date: new Date().toLocaleDateString("en-US", { timeZone: "America/Los_Angeles" }),
         agent: c.agent.name, full_name: c.fullName, phone1: c.phone ?? "", email: c.email ?? "", lead_source: c.leadSource ?? "",
+        address1: c.street ?? "", address2: c.street2 ?? "", city: c.city ?? "", state: c.state ?? "", zip: c.zip ?? "",
       },
       choice: { ...data.choice, type: c.type === "COMMERCIAL" ? "Commercial" : "Personal", priority: c.priority ?? "Normal" },
     };

@@ -117,6 +117,16 @@ export function IntakeForm({ contactId, initial, hasSaved }: { contactId: string
           ["spouse_dob", "Date of birth", "", { type: "date" }],
           ["spouse_dl_number", "Driver's license #", "lg:col-span-2"],
           ["spouse_dl_state", "DL state", "", { maxLength: 20 }],
+        ] as Field[]).map(input)}
+        <div>
+          <label className="label" htmlFor="spouse_gender">Spouse gender</label>
+          <select className="input" id="spouse_gender" value={d.text.spouse_gender} onChange={(e) => setText("spouse_gender", e.target.value)}>
+            <option value=""></option>
+            <option>Male</option>
+            <option>Female</option>
+          </select>
+        </div>
+        {([
           ["phone1", "Phone 1", "", { type: "tel" }],
           ["phone2", "Phone 2", "", { type: "tel" }],
           ["email", "Email", "lg:col-span-4", { type: "email" }],

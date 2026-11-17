@@ -17,7 +17,7 @@ export const TEXT_FIELDS = [
 ] as const;
 
 /** Asked on the form but not boxes of their own on the PDF. City, state and zip print at the end of the Address 2 line; gender is only sent to EZLynx. */
-export const EXTRA_TEXT_FIELDS = ["city", "state", "zip", "gender"] as const;
+export const EXTRA_TEXT_FIELDS = ["city", "state", "zip", "gender", "spouse_gender"] as const;
 export const ALL_TEXT_FIELDS = [...TEXT_FIELDS, ...EXTRA_TEXT_FIELDS] as const;
 
 /** Single-choice groups: form key -> option value -> PDF checkbox name. */

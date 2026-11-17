@@ -101,6 +101,7 @@ export function buildEzlynxPayload(c: PushContact, d: IntakeData | null, agent: 
       co_applicant_first_name: spouse?.first ?? "",
       co_applicant_last_name: spouse?.last ?? "",
       co_applicant_date_of_birth: spouse ? isoDate(t?.spouse_dob) : "",
+      co_applicant_gender: spouse ? cleanGender(t?.spouse_gender) : "",
       co_applicant_relationship: spouse ? "Spouse" : "",
       prior_carrier: (commercial ? t?.truck_insurance : t?.current_carrier) ?? "",
       x_date: isoDate(commercial ? t?.truck_renewal_date : t?.expiration_date),

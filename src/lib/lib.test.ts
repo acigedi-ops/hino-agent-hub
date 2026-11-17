@@ -173,7 +173,7 @@ test("EZLynx payload waits for a full address and maps the intake", async () => 
 
   const d = emptyIntake();
   Object.assign(d.text, { spouse_name: "Other Person", spouse_dob: "1991-04-05", current_carrier: "Carrier X", expiration_date: "2027-01-15", dl_number: "SECRETDL123", gender: "F", spouse_gender: "male" });
-  Object.assign(d.drivers[0], { name: "Sample Test Person", relationship: "Self", marital: "Domestic partner", dl: "SECRETDL123" });
+  Object.assign(d.drivers[0], { name: "Sample Test Person", relationship: "Self", marital: "Domestic partner", dl: "SECRETDL123", occupation: "Driver" });
   Object.assign(d.vehicles[0], { year: "2020", make: "Make", model: "Model", vin: "1HGCM82633A004352" });
   const r = buildEzlynxPayload({ ...base, street: "1 Test St", city: "Tacoma", state: "wa", zip: "98402" }, d, agent, "https://hub.example/");
   assert.ok("payload" in r);
@@ -183,6 +183,7 @@ test("EZLynx payload waits for a full address and maps the intake", async () => 
   assert.deepEqual([p.gender, p.co_applicant_gender], ["Female", "Male"]);
   assert.equal(p.hub_link, "https://hub.example/contacts/c1");
   assert.match(p.notes, /^Agent: Agent A\. Created in the Rhino Agent Portal on Nov 17, 2026, 3:01\sPM PST\./);
+  assert.match(p.notes, /occupation Driver/);
   assert.match(p.notes, /2020 Make Model, VIN 1HGCM82633A004352/);
   assert.ok(!JSON.stringify(p).includes("SECRETDL123"), "license numbers are never sent");
 

@@ -161,3 +161,37 @@ test("agent document status follows the newest upload and the license date", asy
   assert.equal(docState([d("Producer license", "APPROVED", "2026-01-01", "2026-12-15")], "Producer license", now), "expiring");
   assert.equal(docState([d("Producer license", "APPROVED", "2026-01-01", "2026-10-31")], "Producer license", now), "expired");
 });
+
+test("EZLynx payload waits for a full address and maps the intake", async () => {
+  const { buildEzlynxPayload, splitName, addressLine } = await import("./ezlynx-push");
+  const base = { id: "c1", fullName: "Sample Test Person", type: "PERSONAL" as const, phone: "2065550100", email: "s@example.com", dob: new Date("1990-02-03T00:00:00Z"), street: null, street2: null, city: null, state: null, zip: null, leadSource: "Walk-in" };
+  const agent = { name: "Agent A", ezlynxUsername: "agenta" };
+  assert.deepEqual(buildEzlynxPayload(base, null, agent, ""), { missing: ["street address", "city", "state", "zip"] });
+  assert.deepEqual(buildEzlynxPayload({ ...base, fullName: "Cher", street: "1 Test St", city: "Tacoma", state: "Washington", zip: "984" }, null, agent, ""), { missing: ["first and last name", "state", "zip"] });
+  assert.deepEqual(splitName("Person, Sample"), { first: "Sample", last: "Person" });
+  assert.equal(addressLine({ street: "1 Test St", city: "Tacoma", state: "WA", zip: "98402" }), "1 Test St, Tacoma, WA 98402");
+
+  const d = emptyIntake();
+  Object.assign(d.text, { spouse_name: "Other Person", spouse_dob: "1991-04-05", current_carrier: "Carrier X", expiration_date: "2027-01-15", dl_number: "SECRETDL123" });
+  Object.assign(d.drivers[0], { name: "Sample Test Person", relationship: "Self", marital: "Domestic partner", dl: "SECRETDL123" });
+  Object.assign(d.vehicles[0], { year: "2020", make: "Make", model: "Model", vin: "1HGCM82633A004352" });
+  const r = buildEzlynxPayload({ ...base, street: "1 Test St", city: "Tacoma", state: "wa", zip: "98402" }, d, agent, "https://hub.example/");
+  assert.ok("payload" in r);
+  const p = r.payload;
+  assert.deepEqual([p.first_name, p.last_name, p.state, p.date_of_birth, p.marital_status, p.assigned_username], ["Sample Test", "Person", "WA", "1990-02-03", "Domestic Partner", "agenta"]);
+  assert.deepEqual([p.co_applicant_first_name, p.co_applicant_last_name, p.co_applicant_relationship, p.x_date, p.prior_carrier, p.line_of_business], ["Other", "Person", "Spouse", "2027-01-15", "Carrier X", "AUTOP"]);
+  assert.equal(p.hub_link, "https://hub.example/contacts/c1");
+  assert.match(p.notes, /2020 Make Model, VIN 1HGCM82633A004352/);
+  assert.ok(!JSON.stringify(p).includes("SECRETDL123"), "license numbers are never sent");
+
+  const biz = buildEzlynxPayload({ ...base, type: "COMMERCIAL", street: "1 Test St", city: "Tacoma", state: "WA", zip: "98402" }, null, { name: "A", ezlynxUsername: null }, "");
+  assert.ok("payload" in biz);
+  assert.deepEqual([biz.payload.business_name, biz.payload.line_of_business, biz.payload.assigned_username], ["Sample Test Person", "AUTOB", ""]);
+});
+
+test("city, state and zip print after Address 2 on the PDF", async () => {
+  const d = emptyIntake();
+  Object.assign(d.text, { full_name: "Sample Applicant", address1: "1 Test St", address2: "Apt 2", city: "Tacoma", state: "WA", zip: "98402" });
+  const out = await PDFDocument.load(await fillIntakePdf(readFileSync("public/forms/rhino-intake-template.pdf"), d));
+  assert.equal(out.getForm().getTextField("address2").getText(), "Apt 2, Tacoma, WA 98402");
+});

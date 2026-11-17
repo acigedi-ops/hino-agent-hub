@@ -11,7 +11,9 @@ export async function fillIntakePdf(template: Uint8Array | ArrayBuffer, d: Intak
   const text = (name: string, v: string) => { if (v) form.getTextField(name).setText(usDate(v)); };
   const check = (name: string) => form.getCheckBox(name).check();
 
-  for (const k of TEXT_FIELDS) text(k, d.text[k]);
+  // City, state and zip have no boxes of their own on the printed form, so they follow Address 2.
+  const cityLine = [d.text.city, [d.text.state, d.text.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  for (const k of TEXT_FIELDS) text(k, k === "address2" ? [d.text.address2, cityLine].filter(Boolean).join(", ") : d.text[k]);
   for (const [group, options] of Object.entries(CHOICES)) {
     const picked = d.choice[group as keyof typeof CHOICES];
     const field = (options as Record<string, string>)[picked];

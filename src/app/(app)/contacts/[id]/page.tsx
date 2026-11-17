@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
-import { addNote, addPolicy, addTask, deleteDocument, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
+import { addNote, addPolicy, addTask, deleteDocument, sendToEzlynx, resendIntakeToEzlynx, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
 import { showCode } from "@/lib/referrals";
 import { OTHER_DOC_KINDS, REQUIRED_DOCS, REQUIRED_DOC_HINTS, fmtSize, missingDocs } from "@/lib/documents";
 import { ActionForm } from "@/components/ActionForm";
@@ -11,6 +11,8 @@ import { TaskRow } from "@/components/TaskRow";
 import { today } from "@/lib/tasks";
 import { FEE_STATUS } from "@/lib/fees";
 import { StageBadge } from "@/components/StageBadge";
+import { EZLYNX_FILE_TYPES, missingForEzlynx } from "@/lib/ezlynx-push";
+import { ezlynxConnected, ezlynxDocsConnected } from "@/lib/ezlynx-sync";
 
 export default async function ContactPage({ params }: { params: Promise<{ id: string }> }) {
   const u = await requireUser();
@@ -25,7 +27,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       referredBy: { select: { id: true, fullName: true, agentId: true } },
       referrals: { select: { id: true, fullName: true, stage: true, agentId: true, referredAt: true, referralRewardedAt: true }, orderBy: { referredAt: "desc" } },
       policies: { orderBy: { expirationDate: "asc" } },
-      documents: { orderBy: { createdAt: "desc" }, select: { id: true, kind: true, filename: true, size: true, createdAt: true, uploadedBy: { select: { name: true } } } },
+      documents: { orderBy: { createdAt: "desc" }, select: { id: true, kind: true, filename: true, size: true, createdAt: true, ezlynxSentAt: true, mimeType: true, uploadedBy: { select: { name: true } } } },
       activities: { orderBy: { createdAt: "desc" }, take: 100, include: { user: true } },
     },
   });
@@ -33,13 +35,16 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   const agents = u.role === "ADMIN" ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
   const sources = await db.referralSource.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, kind: true } });
   const isClient = c.stage === "CLIENT";
+  const ezMissing = missingForEzlynx(c);
+  const ezOn = ezlynxConnected(c.type);
+  const ezDocs = ezlynxDocsConnected(c.type);
   const missing = missingDocs(c.documents.map((d) => d.kind));
   const others = c.documents.filter((d) => !(REQUIRED_DOCS as readonly string[]).includes(d.kind));
   const docRow = (d: (typeof c.documents)[number]) => (
     <div key={d.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2 first:border-0 first:pt-0">
       <div className="min-w-0 text-sm">
         <a className="font-semibold underline" href={`/contacts/${c.id}/documents/${d.id}`} target="_blank">{d.kind}</a>
-        <div className="truncate text-xs text-muted">{d.filename} · {fmtSize(d.size)} · {d.uploadedBy.name} · {fmtDate(d.createdAt)}</div>
+        <div className="truncate text-xs text-muted">{d.filename} · {fmtSize(d.size)} · {d.uploadedBy.name} · {fmtDate(d.createdAt)}{d.ezlynxSentAt ? " · Copied to EZLynx" : c.ezlynxSentAt && ezDocs && !EZLYNX_FILE_TYPES.includes(d.mimeType) ? " · Not copied: EZLynx only takes PDF, JPG and PNG" : ""}</div>
       </div>
       {u.role === "ADMIN" && (
         <ActionForm action={deleteDocument} submit="Delete" buttonClass="btn-quiet"><input type="hidden" name="documentId" value={d.id} /></ActionForm>
@@ -239,6 +244,31 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className="space-y-6">
+        <section className="space-y-2">
+          <h2 className="h2">EZLynx</h2>
+          <div className="card space-y-2 text-sm">
+            {c.ezlynxSentAt ? (
+              <p><span className="font-semibold">Sent to EZLynx</span> on {fmtDate(c.ezlynxSentAt)}. Look for them there under the same name. Changes made here after that date are not sent again.</p>
+            ) : null}
+            {c.ezlynxSentAt && ezDocs ? (
+              <>
+                <p className="text-muted">Files uploaded here are copied to their Documents in EZLynx, in the folder Rhino Agent Portal. {c.ezlynxIntakeSentAt ? `The intake form was copied on ${fmtDate(c.ezlynxIntakeSentAt)}.` : "The intake form is copied when it is first saved."}</p>
+                {c.ezlynxIntakeSentAt && <ActionForm action={resendIntakeToEzlynx} submit="Send the intake form again" buttonClass="btn-quiet"><input type="hidden" name="contactId" value={c.id} /></ActionForm>}
+              </>
+            ) : c.ezlynxSentAt ? (
+              <p className="text-muted">Files are not copied to EZLynx yet.</p>
+            ) : !ezOn ? (
+              <p className="text-muted">Not sent. {c.type === "COMMERCIAL" ? "Commercial applicants are not connected to EZLynx yet." : "EZLynx is not connected yet."} {u.role === "ADMIN" ? "Add the Zapier address in Render to turn this on." : "The owner turns this on."}</p>
+            ) : ezMissing.length ? (
+              <p><span className="font-semibold">Not sent yet.</span> EZLynx needs the {ezMissing.join(", ")}. Add it on the <Link className="underline" href={`/contacts/${c.id}/intake`}>intake form</Link> and it goes over when you save.</p>
+            ) : (
+              <>
+                <p><span className="font-semibold">Not sent yet.</span>{c.ezlynxError ? ` Last try failed: ${c.ezlynxError}.` : ""}</p>
+                <ActionForm action={sendToEzlynx} submit="Send to EZLynx" buttonClass="btn-quiet"><input type="hidden" name="contactId" value={c.id} /></ActionForm>
+              </>
+            )}
+          </div>
+        </section>
         <section className="space-y-2">
           <h2 className="h2">Follow-ups</h2>
           <div className="card space-y-3">

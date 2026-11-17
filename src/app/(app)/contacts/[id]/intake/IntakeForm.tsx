@@ -110,8 +110,11 @@ export function IntakeForm({ contactId, initial, hasSaved }: { contactId: string
           ["phone1", "Phone 1", "", { type: "tel" }],
           ["phone2", "Phone 2", "", { type: "tel" }],
           ["email", "Email", "lg:col-span-4", { type: "email" }],
-          ["address1", "Address 1", "lg:col-span-3"],
-          ["address2", "Address 2", "lg:col-span-3"],
+          ["address1", "Street address", "lg:col-span-3"],
+          ["address2", "Apt or unit", "lg:col-span-3"],
+          ["city", "City", "lg:col-span-3"],
+          ["state", "State", "", { maxLength: 2, placeholder: "WA" }],
+          ["zip", "Zip", "lg:col-span-2", { inputMode: "numeric", maxLength: 10 }],
         ] as Field[]).map(input)}
       </section>
 

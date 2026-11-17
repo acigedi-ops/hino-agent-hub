@@ -11,12 +11,18 @@ export default async function NewContact() {
   return (
     <div className="max-w-xl space-y-4">
       <h1 className="h1">New applicant</h1>
-      <p className="text-sm text-muted">A name and a phone or email is enough. The hub checks whether this person is already with another agent.</p>
+      <p className="text-sm text-muted">A name and a phone or email is enough. The hub checks whether this person is already with another agent. With a full address, the applicant is also sent to EZLynx.</p>
       <ActionForm action={createContact} submit="Add applicant" className="card space-y-3">
         <div><label className="label" htmlFor="fullName">Full name or business</label><input className="input" id="fullName" name="fullName" required /></div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div><label className="label" htmlFor="phone">Phone</label><input className="input" id="phone" name="phone" type="tel" /></div>
           <div><label className="label" htmlFor="email">Email</label><input className="input" id="email" name="email" type="email" /></div>
+        </div>
+        <div><label className="label" htmlFor="street">Street address</label><input className="input" id="street" name="street" autoComplete="off" /></div>
+        <div className="grid gap-3 sm:grid-cols-4">
+          <div className="sm:col-span-2"><label className="label" htmlFor="city">City</label><input className="input" id="city" name="city" autoComplete="off" /></div>
+          <div><label className="label" htmlFor="state">State</label><input className="input uppercase" id="state" name="state" maxLength={2} placeholder="WA" autoComplete="off" /></div>
+          <div><label className="label" htmlFor="zip">Zip</label><input className="input" id="zip" name="zip" inputMode="numeric" maxLength={10} autoComplete="off" /></div>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <div><label className="label" htmlFor="type">Quote type</label>

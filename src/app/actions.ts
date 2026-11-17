@@ -8,6 +8,7 @@ import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut,
 import { SOURCE_KINDS, MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
 import { createContactCore, findReferrer, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
 import { lookupVin } from "@/lib/vin";
+import { pushDocuments, pushToEzlynx } from "@/lib/ezlynx-sync";
 import { AGENT_DOC_KINDS } from "@/lib/agent-docs";
 import { MAX_BODY, MAX_SUBJECT, replyTo, startConversation } from "@/lib/messages";
 import { addDays, settleTasks, syncAutoTasks, taskScope, today } from "@/lib/tasks";
@@ -69,6 +70,7 @@ export async function createContact(_: FormState, f: FormData): Promise<FormStat
   const res = await createContactCore(u, {
     fullName: s(f, "fullName"), phone: s(f, "phone"), email: s(f, "email"), type: s(f, "type"),
     leadSource: s(f, "leadSource"), priority: s(f, "priority"), agentId: s(f, "agentId"), referralCode: s(f, "referralCode"), referralSourceId: s(f, "referralSourceId"),
+    street: s(f, "street"), city: s(f, "city"), state: s(f, "state"), zip: s(f, "zip"),
   });
   if ("error" in res) return res;
   redirect(`/contacts/${res.contact.id}`);
@@ -151,6 +153,26 @@ export async function setReferralRewarded(_: FormState, f: FormData): Promise<Fo
   return {};
 }
 
+/** Tries again to send an applicant to EZLynx, for example after the address was filled in or Zapier was down. */
+export async function sendToEzlynx(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const c = await ownedContact(u, s(f, "contactId"));
+  const res = await pushToEzlynx(c.id, u.id);
+  revalidatePath(`/contacts/${c.id}`);
+  return res.status === "sent" || res.status === "already" ? { ok: res.message } : { error: res.message };
+}
+
+/** Sends the filled intake PDF to EZLynx again, for example after the form was corrected. */
+export async function resendIntakeToEzlynx(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const c = await ownedContact(u, s(f, "contactId"));
+  if (!c.ezlynxSentAt) return { error: "This person has not been sent to EZLynx yet." };
+  await db.contact.update({ where: { id: c.id }, data: { ezlynxIntakeSentAt: null } });
+  const n = await pushDocuments(c.id);
+  revalidatePath(`/contacts/${c.id}`);
+  return n ? { ok: "Sent. It shows in EZLynx Documents in a few minutes." } : { error: "Nothing was sent. Save the intake form first, or check that EZLynx documents are connected." };
+}
+
 // ---------- intake ----------
 
 export async function saveIntake(contactId: string, raw: unknown): Promise<FormState> {
@@ -158,7 +180,8 @@ export async function saveIntake(contactId: string, raw: unknown): Promise<FormS
   const res = await saveIntakeCore(u, await ownedContact(u, contactId), raw);
   if ("error" in res) return res;
   revalidatePath("/", "layout");
-  return { ok: "Intake saved." };
+  const e = res.ezlynx;
+  return { ok: e?.status === "sent" ? "Intake saved and sent to EZLynx." : e?.status === "failed" ? `Intake saved. ${e.message}` : "Intake saved." };
 }
 
 /** Looks up year, make and model for a VIN in the public NHTSA database. Returns null if it cannot be decoded. */
@@ -290,7 +313,7 @@ export async function renameAgent(_: FormState, f: FormData): Promise<FormState>
   if (name.length < 2 || !email.includes("@")) return { error: "Enter a name and a valid email." };
   const taken = await db.user.findUnique({ where: { email } });
   if (taken && taken.id !== id) return { error: "Someone else already has that email." };
-  await db.user.update({ where: { id }, data: { name, email } });
+  await db.user.update({ where: { id }, data: { name, email, ezlynxUsername: s(f, "ezlynxUsername").slice(0, 100) || null } });
   revalidatePath("/", "layout");
   return { ok: "Saved." };
 }

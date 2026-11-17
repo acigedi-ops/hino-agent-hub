@@ -34,7 +34,7 @@ const MARITAL: Record<string, string> = { single: "Single", married: "Married", 
 
 export type PushContact = {
   id: string; fullName: string; type: "PERSONAL" | "COMMERCIAL"; phone: string | null; email: string | null; dob: Date | null;
-  street: string | null; street2: string | null; city: string | null; state: string | null; zip: string | null; leadSource: string | null;
+  street: string | null; street2: string | null; city: string | null; state: string | null; zip: string | null; leadSource: string | null; createdAt?: Date | null;
 };
 export type PushAgent = { name: string; ezlynxUsername: string | null };
 export type EzlynxPayload = Record<string, string>;
@@ -51,8 +51,11 @@ export function missingForEzlynx(c: PushContact): string[] {
 }
 
 /** A short summary of the intake form for the EZLynx notes box. Leaves out license numbers. */
-export function intakeNotes(d: IntakeData | null, agent: string): string {
-  const lines = [`Added in the Rhino Agent Portal by ${agent}.`];
+/** For example "Nov 17, 2026, 3:01 PM PST". The agency works on Pacific time. */
+export const pacificTime = (at: Date) => at.toLocaleString("en-US", { timeZone: "America/Los_Angeles", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+
+export function intakeNotes(d: IntakeData | null, agent: string, createdAt?: Date | null): string {
+  const lines = [`Agent: ${agent}. Created in the Rhino Agent Portal${createdAt ? ` on ${pacificTime(createdAt)}` : ""}.`];
   if (!d) return lines[0];
   const t = d.text;
   if (t.current_carrier) lines.push(`Current carrier: ${t.current_carrier}${t.expiration_date ? `, expires ${t.expiration_date}` : ""}${t.how_long_insured ? `, insured ${t.how_long_insured}` : ""}`);
@@ -110,7 +113,7 @@ export function buildEzlynxPayload(c: PushContact, d: IntakeData | null, agent: 
       source: "Rhino Agent Portal",
       agent_name: agent.name,
       assigned_username: agent.ezlynxUsername?.trim() ?? "",
-      notes: intakeNotes(d, agent.name),
+      notes: intakeNotes(d, agent.name, c.createdAt),
     },
   };
 }

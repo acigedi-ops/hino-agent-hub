@@ -164,7 +164,7 @@ test("agent document status follows the newest upload and the license date", asy
 
 test("EZLynx payload waits for a full address and maps the intake", async () => {
   const { buildEzlynxPayload, splitName, addressLine } = await import("./ezlynx-push");
-  const base = { id: "c1", fullName: "Sample Test Person", type: "PERSONAL" as const, phone: "2065550100", email: "s@example.com", dob: new Date("1990-02-03T00:00:00Z"), street: null, street2: null, city: null, state: null, zip: null, leadSource: "Walk-in" };
+  const base = { id: "c1", fullName: "Sample Test Person", type: "PERSONAL" as const, phone: "2065550100", email: "s@example.com", dob: new Date("1990-02-03T00:00:00Z"), street: null, street2: null, city: null, state: null, zip: null, leadSource: "Walk-in", createdAt: new Date("2026-11-17T23:01:00Z") };
   const agent = { name: "Agent A", ezlynxUsername: "agenta" };
   assert.deepEqual(buildEzlynxPayload(base, null, agent, ""), { missing: ["street address", "city", "state", "zip"] });
   assert.deepEqual(buildEzlynxPayload({ ...base, fullName: "Cher", street: "1 Test St", city: "Tacoma", state: "Washington", zip: "984" }, null, agent, ""), { missing: ["first and last name", "state", "zip"] });
@@ -182,6 +182,7 @@ test("EZLynx payload waits for a full address and maps the intake", async () => 
   assert.deepEqual([p.co_applicant_first_name, p.co_applicant_last_name, p.co_applicant_relationship, p.x_date, p.prior_carrier, p.line_of_business], ["Other", "Person", "Spouse", "2027-01-15", "Carrier X", "AUTOP"]);
   assert.deepEqual([p.gender, p.co_applicant_gender], ["Female", "Male"]);
   assert.equal(p.hub_link, "https://hub.example/contacts/c1");
+  assert.match(p.notes, /^Agent: Agent A\. Created in the Rhino Agent Portal on Nov 17, 2026, 3:01\sPM PST\./);
   assert.match(p.notes, /2020 Make Model, VIN 1HGCM82633A004352/);
   assert.ok(!JSON.stringify(p).includes("SECRETDL123"), "license numbers are never sent");
 

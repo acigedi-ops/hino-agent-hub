@@ -28,6 +28,8 @@ export function splitName(full: string): { first: string; last: string } | null 
 }
 
 const isoDate = (v?: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "");
+/** EZLynx only takes Male or Female. A license shows M or F; anything else is left blank. */
+export const cleanGender = (v?: string | null) => { const g = (v ?? "").trim().toLowerCase(); return g === "m" || g === "male" ? "Male" : g === "f" || g === "female" ? "Female" : ""; };
 const MARITAL: Record<string, string> = { single: "Single", married: "Married", divorced: "Divorced", widowed: "Widowed", separated: "Separated", "domestic partner": "Domestic Partner" };
 
 export type PushContact = {
@@ -94,6 +96,7 @@ export function buildEzlynxPayload(c: PushContact, d: IntakeData | null, agent: 
       city: c.city!.trim(),
       state: cleanState(c.state)!,
       zip: cleanZip(c.zip)!,
+      gender: cleanGender(t?.gender),
       marital_status: MARITAL[(self?.marital ?? "").toLowerCase()] ?? "",
       co_applicant_first_name: spouse?.first ?? "",
       co_applicant_last_name: spouse?.last ?? "",

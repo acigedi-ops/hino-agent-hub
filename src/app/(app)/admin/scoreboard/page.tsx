@@ -42,9 +42,9 @@ export default async function Scoreboard({ searchParams }: { searchParams: Promi
           <h1 className="h1">Scoreboard</h1>
           <p className="mt-1 text-sm text-muted">How each agent did in {label}. Only you can see this page.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Link className="btn-quiet" href={`/admin/scoreboard?month=${step(-1)}`}>Previous</Link>
-          <form className="flex items-center gap-2"><input className="input w-auto" name="month" type="month" defaultValue={month} aria-label="Month" /><button className="btn-quiet">Show</button></form>
+          <form className="flex items-center gap-2"><input className="input w-auto min-w-0" name="month" type="month" defaultValue={month} aria-label="Month" /><button className="btn-quiet">Show</button></form>
           <Link className="btn-quiet" href={`/admin/scoreboard?month=${step(1)}`}>Next</Link>
         </div>
       </div>

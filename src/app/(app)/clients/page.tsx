@@ -70,22 +70,22 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
           <div key={l} className="card"><div className="text-xl font-bold">{v}</div><div className="text-xs font-semibold uppercase tracking-wide text-muted">{l}</div></div>
         ))}
       </div>
-      <form className="flex flex-wrap gap-2">
-        <input className="input max-w-xs" name="q" defaultValue={q} placeholder="Name, phone, email, carrier or policy #" aria-label="Search" />
-        <select className="input max-w-40" name="status" defaultValue={status} aria-label="Status">
+      <form className="grid grid-cols-2 gap-2 md:flex md:flex-wrap">
+        <input className="input col-span-2 md:max-w-xs" name="q" defaultValue={q} placeholder="Name, phone, email, carrier or policy #" aria-label="Search" />
+        <select className="input md:max-w-40" name="status" defaultValue={status} aria-label="Status">
           <option value="CLIENT">Active clients</option><option value="FORMER">Former clients</option><option value="ALL">Active and former</option>
         </select>
-        <select className="input max-w-40" name="type" defaultValue={sp.type ?? ""} aria-label="Type">
+        <select className="input md:max-w-40" name="type" defaultValue={sp.type ?? ""} aria-label="Type">
           <option value="">All types</option><option value="PERSONAL">Personal</option><option value="COMMERCIAL">Commercial</option>
         </select>
-        <select className="input max-w-44" name="line" defaultValue={sp.line ?? ""} aria-label="Policy line">
+        <select className="input md:max-w-44" name="line" defaultValue={sp.line ?? ""} aria-label="Policy line">
           <option value="">All lines</option>{POLICY_LINES.map((l) => <option key={l}>{l}</option>)}
         </select>
-        <select className="input max-w-44" name="files" defaultValue={sp.files ?? ""} aria-label="Files">
+        <select className="input md:max-w-44" name="files" defaultValue={sp.files ?? ""} aria-label="Files">
           <option value="">All files</option><option value="missing">Missing a document</option>
         </select>
         {u.role === "ADMIN" && (
-          <select className="input max-w-48" name="agent" defaultValue={sp.agent ?? ""} aria-label="Agent">
+          <select className="input md:max-w-48" name="agent" defaultValue={sp.agent ?? ""} aria-label="Agent">
             <option value="">All agents</option>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         )}

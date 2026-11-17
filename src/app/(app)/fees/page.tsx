@@ -118,9 +118,9 @@ export default async function Fees({ searchParams }: { searchParams: Promise<{ m
       <section className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 className="h2">{admin ? "Month end" : "My fees"}: {label}</h2>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link className="btn-quiet" href={`/fees?month=${step(-1)}`}>Previous</Link>
-            <form className="flex items-center gap-2"><input className="input w-auto" name="month" type="month" defaultValue={month} aria-label="Month" /><button className="btn-quiet">Show</button></form>
+            <form className="flex items-center gap-2"><input className="input w-auto min-w-0" name="month" type="month" defaultValue={month} aria-label="Month" /><button className="btn-quiet">Show</button></form>
             <Link className="btn-quiet" href={`/fees?month=${step(1)}`}>Next</Link>
           </div>
         </div>

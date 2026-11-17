@@ -52,7 +52,7 @@ export default async function Tasks({ searchParams }: { searchParams: Promise<{ 
             className={`rounded-full border px-3 py-1.5 text-sm font-medium ${view === v.key ? "border-ink bg-ink text-gold" : "border-line bg-white hover:bg-paper"}`}>{v.label}</Link>
         ))}
         {admin && (
-          <form className="ml-auto flex items-center gap-2">
+          <form className="flex w-full items-center gap-2 md:ml-auto md:w-auto">
             <input type="hidden" name="view" value={view} />
             <select className="input w-auto" name="agent" defaultValue={agent} aria-label="Agent"><option value="">All agents</option>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
             <button className="btn-quiet">Show</button>

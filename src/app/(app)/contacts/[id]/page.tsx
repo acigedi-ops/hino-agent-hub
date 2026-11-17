@@ -234,9 +234,9 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               {others.map((d) => docRow(d))}
               <ActionForm action={uploadDocument} submit="Upload" className="flex flex-wrap items-end gap-2 border-t border-line pt-3" buttonClass="btn-quiet">
                 <input type="hidden" name="contactId" value={c.id} />
-                <div><label className="label" htmlFor="doc-kind">Type</label>
+                <div className="w-full md:w-auto"><label className="label" htmlFor="doc-kind">Type</label>
                   <select className="input" id="doc-kind" name="kind">{OTHER_DOC_KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
-                <div className="min-w-0 flex-1"><label className="label" htmlFor="doc-file">File (PDF or photo, up to 10 MB)</label>
+                <div className="min-w-0 basis-full md:flex-1 md:basis-0"><label className="label" htmlFor="doc-file">File (PDF or photo, up to 10 MB)</label>
                   <input className="input" id="doc-file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" required /></div>
               </ActionForm>
             </div>

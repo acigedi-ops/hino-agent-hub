@@ -37,16 +37,16 @@ export function TaskRow({ t, today, showAgent, showContact = true }: { t: TaskVi
       {t.doneAt ? (
         <ActionForm action={reopenTask} submit="Reopen" buttonClass="btn-quiet"><input type="hidden" name="taskId" value={t.id} /></ActionForm>
       ) : (
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex w-full flex-col gap-2 md:w-auto md:flex-row md:flex-wrap md:items-start">
           <ActionForm action={snoozeTask} submit="Push back" className="flex items-start gap-1" buttonClass="btn-quiet">
             <input type="hidden" name="taskId" value={t.id} />
-            <select className="input w-auto" name="days" aria-label="Push back by" defaultValue="1">
+            <select className="input min-w-0 flex-1 md:w-auto md:flex-none" name="days" aria-label="Push back by" defaultValue="1">
               <option value="1">Tomorrow</option><option value="3">3 days</option><option value="7">1 week</option><option value="14">2 weeks</option>
             </select>
           </ActionForm>
           <ActionForm action={completeTask} submit="Done" className="flex items-start gap-1" buttonClass="btn-gold">
             <input type="hidden" name="taskId" value={t.id} />
-            <input className="input w-36" name="note" placeholder="What happened" aria-label="What happened (optional)" maxLength={500} />
+            <input className="input min-w-0 flex-1 md:w-36 md:flex-none" name="note" placeholder="What happened" aria-label="What happened (optional)" maxLength={500} />
           </ActionForm>
         </div>
       )}

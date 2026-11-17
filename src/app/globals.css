@@ -27,3 +27,40 @@ body {
   .th { @apply px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-muted; }
   .td { @apply px-3 py-2 text-sm; }
 }
+
+/* Phones: bigger type and tap targets, and tables shown as a list of cards (see StackTables). */
+@media (max-width: 767px) {
+  .input { font-size: 1rem; min-height: 2.75rem; }
+  textarea.input { min-height: 5rem; }
+  .btn, .btn-gold, .btn-quiet { min-height: 2.75rem; padding-inline: 0.875rem; }
+  .h1 { font-size: 1.375rem; line-height: 1.75rem; }
+  input[type="checkbox"], input[type="radio"] { width: 1.25rem; height: 1.25rem; }
+  input[type="file"] { max-width: 100%; font-size: 0.875rem; }
+  input[type="file"]::file-selector-button { min-height: 2.5rem; }
+
+  table[data-stack] { display: block; min-width: 0 !important; width: 100%; }
+  table[data-stack] thead { display: none; }
+  table[data-stack] tbody, table[data-stack] tfoot { display: block; }
+  table[data-stack] tr { display: block; padding: 0.625rem 0.875rem; border-bottom: 1px solid var(--color-line); }
+  table[data-stack] tbody:last-child tr:last-child, table[data-stack] tfoot tr:last-child { border-bottom: 0; }
+  table[data-stack] td, table[data-stack] tbody th {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+    padding: 0.2rem 0; text-align: right; white-space: normal; overflow-wrap: anywhere; border: 0;
+  }
+  table[data-stack] td::before, table[data-stack] tbody th::before {
+    content: attr(data-label); flex-shrink: 0; max-width: 45%; text-align: left;
+    font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-muted);
+  }
+  table[data-stack] td[data-label=""]::before, table[data-stack] td[data-title]::before { content: none; }
+  table[data-stack] td[data-label=""] { justify-content: flex-start; text-align: left; }
+  table[data-stack] td[data-title] { justify-content: flex-start; text-align: left; font-size: 1rem; font-weight: 600; }
+  table[data-stack] td[data-empty] { display: none; }
+  table[data-stack] td[data-field] { flex-direction: column; align-items: stretch; gap: 0.25rem; padding: 0.375rem 0; text-align: left; }
+  table[data-stack] td[data-field]::before { max-width: none; }
+  table[data-stack] td[data-field] .input { width: 100%; max-width: none; }
+}
+
+@media (max-width: 767px) {
+  main a.rounded-full { display: inline-flex; align-items: center; min-height: 2.5rem; }
+  main summary { padding-block: 0.6rem; }
+}

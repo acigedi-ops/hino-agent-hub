@@ -37,7 +37,7 @@ export function IntakeForm({ contactId, initial, hasSaved }: { contactId: string
       <div className="flex flex-wrap gap-1.5">
         {Object.keys(CHOICES[k]).map((opt) => (
           <button key={opt} type="button" aria-pressed={d.choice[k] === opt} onClick={() => setChoice(k, opt)}
-            className={`cursor-pointer rounded-md border px-2.5 py-1.5 text-sm ${d.choice[k] === opt ? "border-ink bg-ink font-semibold text-gold" : "border-line bg-white"}`}>
+            className={`cursor-pointer rounded-md border px-3.5 py-2.5 text-base md:px-2.5 md:py-1.5 md:text-sm ${d.choice[k] === opt ? "border-ink bg-ink font-semibold text-gold" : "border-line bg-white"}`}>
             {opt}
           </button>
         ))}
@@ -265,7 +265,7 @@ export function IntakeForm({ contactId, initial, hasSaved }: { contactId: string
         </div>
       </div>
 
-      <div className="sticky bottom-0 -mx-4 flex flex-wrap items-center gap-3 border-t border-line bg-paper/95 px-4 py-3 md:-mx-8 md:px-8">
+      <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] -mx-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line bg-paper/95 px-4 py-2 md:bottom-0 md:-mx-8 md:px-8 md:py-3">
         <button className="btn" disabled={pending}>{pending ? "Saving..." : "Save intake"}</button>
         {saved && <a className="btn-quiet" href={`/contacts/${contactId}/intake/pdf`} target="_blank">Open Rhino PDF</a>}
         {msg.error && <span role="alert" className="text-sm font-medium text-red-800">{msg.error}</span>}

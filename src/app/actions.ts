@@ -421,6 +421,22 @@ export async function updateReferralSource(_: FormState, f: FormData): Promise<F
   return { ok: "Saved." };
 }
 
+export async function deleteReferralSource(_: FormState, f: FormData): Promise<FormState> {
+  const u = await requireUser();
+  const src = await db.referralSource.findUnique({ where: { id: s(f, "id") }, include: { _count: { select: { contacts: true } } } });
+  if (!src) return { error: "Referral source not found." };
+  // The owner can delete any source. The agent who added one can delete it only while nobody is filed under it,
+  // so an agent can never unlink another agent's people.
+  if (u.role !== "ADMIN") {
+    if (src.createdById !== u.id) return { error: "Only the owner or the agent who added this source can delete it." };
+    if (src._count.contacts > 0) return { error: "People are filed under this source, so only the owner can delete it." };
+  }
+  // People it sent stay in the hub; the database clears their referral source.
+  await db.referralSource.delete({ where: { id: src.id } });
+  revalidatePath("/sources");
+  redirect("/sources");
+}
+
 export async function setReferralSource(_: FormState, f: FormData): Promise<FormState> {
   const u = await requireUser();
   const c = await ownedContact(u, s(f, "contactId"));

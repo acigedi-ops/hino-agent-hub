@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { fmtDate, fmtMoney } from "@/lib/contacts";
-import { updateReferralSource } from "@/app/actions";
+import { deleteReferralSource, updateReferralSource } from "@/app/actions";
 import { ActionForm } from "@/components/ActionForm";
 import { SourceFields } from "@/components/SourceFields";
 import { StageBadge } from "@/components/StageBadge";
@@ -23,6 +23,8 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   const premium = active.reduce((n, p) => n + Number(p.premium), 0);
   const canEdit = u.role === "ADMIN" || src.createdById === u.id;
   const admin = u.role === "ADMIN";
+  const total = await db.contact.count({ where: { referralSourceId: id } });
+  const canDelete = admin || (src.createdById === u.id && total === 0);
   const stats: [string, string | number][] = [["People sent", people.length], ["Became clients", people.filter((c) => c.policies.length > 0).length], ["Active policies", active.length], ["Premium in force", fmtMoney(premium)]];
   return (
     <div className="max-w-4xl space-y-6">
@@ -96,6 +98,17 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
           <h2 className="h2">Edit details</h2>
           <ActionForm action={updateReferralSource} submit="Save" className="card space-y-3"><input type="hidden" name="id" value={src.id} /><SourceFields v={src} /></ActionForm>
         </section>
+      )}
+      {canDelete && (
+        <details className="card">
+          <summary className="cursor-pointer py-1 text-sm font-semibold text-red-700">Delete this referral source</summary>
+          <div className="mt-2 space-y-3">
+            <p className="text-sm">
+              This removes {src.name} and its referral code for good. {total === 0 ? "Nobody is filed under it." : `The ${total === 1 ? "1 person" : `${total} people`} it sent ${total === 1 ? "stays" : "stay"} in the hub with their policies, but will no longer show a referral source.`}
+            </p>
+            <ActionForm action={deleteReferralSource} submit="Yes, delete it" buttonClass="btn-quiet"><input type="hidden" name="id" value={src.id} /></ActionForm>
+          </div>
+        </details>
       )}
     </div>
   );

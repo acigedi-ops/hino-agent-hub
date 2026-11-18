@@ -19,7 +19,8 @@ async function readSheets(file: File): Promise<{ name: string; rows: string[][] 
   try {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(await file.arrayBuffer());
-    return wb.worksheets.map((sheet) => {
+    let formulas = 0, answered = 0;
+    const sheets = wb.worksheets.map((sheet) => {
       const rows: string[][] = [];
       sheet.eachRow({ includeEmpty: true }, (row) => {
         const cells: string[] = [];
@@ -27,13 +28,18 @@ async function readSheets(file: File): Promise<{ name: string; rows: string[][] 
           if (cell.isMerged && cell.master !== cell) { cells[col - 1] = ""; return; }
           const v = cell.value;
           // A formula whose answer is 0 can come through with no stored result.
-          const result = v && typeof v === "object" && "formula" in v ? (v.result ?? 0) : v;
+          const formula = Boolean(v && typeof v === "object" && "formula" in v);
+          if (formula) { formulas++; if ((v as { result?: unknown }).result !== undefined) answered++; }
+          const result = formula ? ((v as { result?: unknown }).result ?? 0) : v;
           cells[col - 1] = result instanceof Date ? result.toISOString().slice(0, 10) : typeof result === "number" ? String(result) : (cell.text ?? "").trim();
         });
         rows.push(Array.from(cells, (c) => c ?? ""));
       });
       return { name: sheet.name, rows };
     });
+    // A file written by a program rather than saved from Excel can hold formulas with no answers, which would all read as 0.
+    if (formulas > 0 && answered === 0) return { error: "This file's formulas have no saved values. Open it in Excel, press Save, and upload it again." };
+    return sheets;
   } catch {
     return { error: "That Excel file could not be read. Open it in Excel, save it again and retry." };
   }

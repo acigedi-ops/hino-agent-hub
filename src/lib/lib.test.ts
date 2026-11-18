@@ -216,3 +216,14 @@ test("a sold EZLynx opportunity is read, anything else is ignored", async () => 
     { ref: "88", name: "Sample Buyer", phones: ["2065550199"], emails: [], carrier: "Sample Carrier", line: "Personal Auto", premium: 1884.57 });
   assert.equal(readSold({ opportunityId: 89, status: "Sold", "primaryContact__firstName": "Sample", "primaryContact__lastName": "Buyer", "lobs[]finalizedPremium": "700" })?.premium, 700);
 });
+
+test("a new EZLynx document is read, folders and the hub's own uploads are skipped", async () => {
+  const { readEzDoc } = await import("./ezlynx-docs");
+  const base = { ApplicantId: 1, FirstName: "Sample", LastName: "Buyer", DocumentId: 55, DocumentType: "Document", DocumentName: "Dec page.pdf", DateCreated: "11/17/2026 4:49:32 PM", PolicyNumber: "P-1", FolderPath: "" };
+  const d = readEzDoc(base);
+  assert.equal(d?.ref, "55"); assert.equal(d?.person, "Sample Buyer"); assert.equal(d?.policyNumber, "P-1");
+  assert.equal(d?.addedAt.toISOString().slice(0, 10), "2026-11-17");
+  assert.equal(readEzDoc({ ...base, DocumentType: "Folder" }), null);
+  assert.equal(readEzDoc({ ...base, FolderPath: "Rhino Agent Portal" }), null);
+  assert.equal(readEzDoc({ ...base, DocumentId: "" }), null);
+});

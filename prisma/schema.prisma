@@ -112,6 +112,7 @@ model Contact {
   policies    Policy[]
   activities  Activity[]
   documents   Document[]
+  ezlynxDocs  EzlynxDoc[]
   /// Code this person shares with friends and family. Entered when a new applicant is added.
   referralCode       String?   @unique
   referredById       String?
@@ -195,6 +196,22 @@ model Document {
   ezlynxSentAt DateTime?
 
   @@index([contactId, createdAt])
+}
+
+/// A document that sits in EZLynx (a declarations page, an ID card). Zapier sends only its details, never the file.
+model EzlynxDoc {
+  id           String   @id @default(cuid())
+  contactId    String
+  contact      Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  /// The document's id in EZLynx, so the same one is never listed twice.
+  ref          String   @unique
+  name         String
+  folder       String?
+  policyNumber String?
+  addedAt      DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([contactId, addedAt])
 }
 
 /// One upload of an EZLynx report by the owner.

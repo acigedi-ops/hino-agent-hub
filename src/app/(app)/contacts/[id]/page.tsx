@@ -28,6 +28,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
       referrals: { select: { id: true, fullName: true, stage: true, agentId: true, referredAt: true, referralRewardedAt: true }, orderBy: { referredAt: "desc" } },
       policies: { orderBy: { expirationDate: "asc" } },
       documents: { orderBy: { createdAt: "desc" }, select: { id: true, kind: true, filename: true, size: true, createdAt: true, ezlynxSentAt: true, mimeType: true, uploadedBy: { select: { name: true } } } },
+      ezlynxDocs: { orderBy: { addedAt: "desc" }, take: 50 },
       activities: { orderBy: { createdAt: "desc" }, take: 100, include: { user: true } },
     },
   });
@@ -255,6 +256,21 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               </ActionForm>
             </div>
           </section>
+
+          {c.ezlynxDocs.length > 0 && <section className="space-y-2">
+            <h2 className="h2">In EZLynx ({c.ezlynxDocs.length})</h2>
+            <div className="card space-y-2 text-sm">
+              <p className="text-muted">These files are kept in EZLynx. Only the name and date are shown here, so ask the office if you need a copy.</p>
+              <ul className="divide-y divide-line">
+                {c.ezlynxDocs.map((d) => (
+                  <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-x-3 py-1.5">
+                    <span className="min-w-0 break-words font-semibold">{d.name}</span>
+                    <span className="text-muted">{[d.policyNumber ? `Policy ${d.policyNumber}` : "", fmtDate(d.addedAt)].filter(Boolean).join(" · ")}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>}
         </div>
 
         <div className="space-y-6">

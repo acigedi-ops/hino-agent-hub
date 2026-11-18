@@ -57,20 +57,20 @@ export default async function Scoreboard({ searchParams }: { searchParams: Promi
         <div className="card overflow-x-auto p-0">
           <table className="w-full">
             <thead><tr className="border-b border-line">
-              <th className="th">Agent</th><th className="th">Applicants added</th><th className="th">Quoted</th><th className="th">Became clients</th><th className="th">Close rate</th><th className="th">Lost</th>
+              <th className="th">Agent</th><th className="th">Applicants added</th><th className="th">Became clients</th><th className="th">Close rate</th><th className="th">Lost</th>
               <th className="th">New policies</th><th className="th">Premium written</th><th className="th">Cancelled</th><th className="th">Tasks done</th><th className="th">Overdue now</th>
             </tr></thead>
             <tbody>
               {s.rows.map((r) => (
                 <tr key={r.id} className="border-b border-line">
                   <td className="td font-semibold"><Link className="underline" href={`/tasks?agent=${r.id}`}>{r.name}</Link></td>
-                  <td className="td">{r.added}</td><td className="td">{r.quoted}</td><td className="td">{r.won}</td><td className="td">{rate(r.won, r.added)}</td><td className="td">{r.lost}</td>
+                  <td className="td">{r.added}</td><td className="td">{r.won}</td><td className="td">{rate(r.won, r.added)}</td><td className="td">{r.lost}</td>
                   <td className="td">{r.policies}</td><td className="td">{fmtMoney(r.premium)}</td><td className="td">{r.cancelled}</td><td className="td">{r.tasksDone}</td>
                   <td className={`td ${r.overdue ? "font-semibold text-red-700" : ""}`}>{r.overdue}</td>
                 </tr>
               ))}
               <tr className="bg-black/[0.03] font-semibold">
-                <td className="td">Total</td><td className="td">{t.added}</td><td className="td">{t.quoted}</td><td className="td">{t.won}</td><td className="td">{rate(t.won, t.added)}</td><td className="td">{t.lost}</td>
+                <td className="td">Total</td><td className="td">{t.added}</td><td className="td">{t.won}</td><td className="td">{rate(t.won, t.added)}</td><td className="td">{t.lost}</td>
                 <td className="td">{t.policies}</td><td className="td">{fmtMoney(t.premium)}</td><td className="td">{t.cancelled}</td><td className="td">{t.tasksDone}</td><td className="td">{t.overdue}</td>
               </tr>
             </tbody>

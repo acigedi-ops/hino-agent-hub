@@ -2,17 +2,17 @@ import type { Stage } from "@prisma/client";
 
 export const STAGES: { key: Stage; label: string; hint: string }[] = [
   { key: "APPLICANT", label: "Applicant", hint: "Entered by the agent" },
-  { key: "QUOTED", label: "Quoted", hint: "Prices given" },
   { key: "CLIENT", label: "Client", hint: "On the EZLynx report" },
   { key: "LOST", label: "Lost / not now", hint: "Reason and requote date" },
   { key: "FORMER", label: "Former client", hint: "No active policy" },
 ];
 
-export const PIPELINE: Stage[] = ["APPLICANT", "QUOTED"];
+/** Quoted is no longer used (2026-11-18): a person is an Applicant until the policy report makes them a Client. */
+export const PIPELINE: Stage[] = ["APPLICANT"];
 export const stageLabel = (s: Stage) => STAGES.find((x) => x.key === s)?.label ?? s;
 
 /** Stages an agent may set by hand. CLIENT and FORMER are set only by policies. */
-export const MANUAL_STAGES: Stage[] = ["APPLICANT", "QUOTED", "LOST"];
+export const MANUAL_STAGES: Stage[] = ["APPLICANT", "LOST"];
 
 /** Digits only, without a leading US country code, so (206) 555-0100 and +1 206 555 0100 match. */
 export function normalizePhone(p?: string | null): string | null {

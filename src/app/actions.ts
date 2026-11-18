@@ -82,8 +82,6 @@ export async function setStage(_: FormState, f: FormData): Promise<FormState> {
   const stage = s(f, "stage") as Stage;
   if (!MANUAL_STAGES.includes(stage)) return { error: "That stage is set automatically from policies." };
   if (c.stage === "CLIENT") return { error: "This contact has an active policy, so they stay a client." };
-  if (stage === "QUOTED" && !(await db.intake.findUnique({ where: { contactId: c.id } })))
-    return { error: "Fill the intake form before marking this applicant as quoted." };
 
   let lostReason: string | null = null;
   let requoteDate: Date | null = null;
@@ -98,7 +96,7 @@ export async function setStage(_: FormState, f: FormData): Promise<FormState> {
   if (stage !== "LOST") await db.task.updateMany({ where: { contactId: c.id, kind: "requote", doneAt: null }, data: { doneAt: new Date(), doneNote: `Moved to ${stageLabel(stage)}` } });
   await syncAutoTasks(true);
   revalidatePath("/", "layout");
-  return { ok: `Moved to ${stageLabel(stage)}.` };
+  return { ok: stage === "LOST" ? "Marked as lost." : "Back to Applicant." };
 }
 
 export async function addNote(_: FormState, f: FormData): Promise<FormState> {

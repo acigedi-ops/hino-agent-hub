@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { canChange, requireUser, viewScope } from "@/lib/auth";
-import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
+import { LOST_REASONS, POLICY_LINES, daysUntil, fmtDate, fmtMoney } from "@/lib/contacts";
 import { addNote, addPolicy, addTask, deleteDocument, sendToEzlynx, resendIntakeToEzlynx, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
 import { showCode } from "@/lib/referrals";
 import { OTHER_DOC_KINDS, REQUIRED_DOCS, REQUIRED_DOC_HINTS, fmtSize, missingDocs } from "@/lib/documents";
@@ -82,22 +82,32 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               {isClient ? (
                 <p className="text-sm text-muted">This contact is a client because a policy from the EZLynx report is on file. They become a former client automatically when the last policy ends.</p>
               ) : (
-                <ActionForm action={setStage} submit="Move" className="space-y-3">
-                  <input type="hidden" name="contactId" value={c.id} />
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div><label className="label" htmlFor="stage">Move to</label>
-                      <select className="input" id="stage" name="stage" defaultValue={MANUAL_STAGES.includes(c.stage) ? c.stage : "APPLICANT"}>
-                        {MANUAL_STAGES.map((s) => <option key={s} value={s}>{stageLabel(s)}</option>)}
-                      </select></div>
-                    <div><label className="label" htmlFor="lostReason">If lost, why</label>
-                      <select className="input" id="lostReason" name="lostReason" defaultValue={c.lostReason ?? ""}>
-                        <option value="">Not lost</option>{LOST_REASONS.map((r) => <option key={r}>{r}</option>)}
-                      </select></div>
-                    <div><label className="label" htmlFor="requoteDate">Requote date</label>
-                      <input className="input" id="requoteDate" name="requoteDate" type="date" defaultValue={c.requoteDate?.toISOString().slice(0, 10) ?? ""} /></div>
+                c.stage === "LOST" ? (
+                  <div className="space-y-2">
+                    <p className="text-sm"><span className="font-semibold">Lost{c.lostReason ? `: ${c.lostReason}` : ""}.</span>{c.requoteDate ? ` Requote on ${fmtDate(c.requoteDate)}.` : ""}</p>
+                    <ActionForm action={setStage} submit="Reopen as applicant" buttonClass="btn-quiet"><input type="hidden" name="contactId" value={c.id} /><input type="hidden" name="stage" value="APPLICANT" /></ActionForm>
                   </div>
-                  {!c.intake && <p className="text-xs text-muted">Fill the intake form before marking this applicant as quoted.</p>}
-                </ActionForm>
+                ) : c.stage === "FORMER" ? (
+                  <p className="text-sm text-muted">This is a former client: their last policy ended. They become a client again when a new policy is on the report.</p>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted">They become a client automatically when their policy is on the new business report.</p>
+                    <details>
+                      <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-semibold underline md:min-h-0">Mark as lost</summary>
+                      <ActionForm action={setStage} submit="Mark as lost" className="mt-2 space-y-3" buttonClass="btn-quiet">
+                        <input type="hidden" name="contactId" value={c.id} /><input type="hidden" name="stage" value="LOST" />
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div><label className="label" htmlFor="lostReason">Why</label>
+                            <select className="input" id="lostReason" name="lostReason" defaultValue="" required>
+                              <option value="" disabled>Pick a reason</option>{LOST_REASONS.map((r) => <option key={r}>{r}</option>)}
+                            </select></div>
+                          <div><label className="label" htmlFor="requoteDate">Requote date (optional)</label>
+                            <input className="input" id="requoteDate" name="requoteDate" type="date" /></div>
+                        </div>
+                      </ActionForm>
+                    </details>
+                  </>
+                )
               )}
               <Link className="inline-block text-sm font-semibold underline" href={`/inbox/new?contact=${c.id}`}>Send a message about this {c.stage === "CLIENT" ? "client" : "applicant"}</Link>
               {u.role === "ADMIN" && (

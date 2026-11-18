@@ -28,7 +28,7 @@ const partial = <K extends string>(keys: readonly K[]) => z.object(Object.fromEn
 const SYSTEM = `You are the assistant built into the Rhino Insurance agent hub, a private web app the agency's agents use next to EZLynx. You help the signed-in agent find people in their book, answer questions about the hub and their book, add applicants, and turn uploaded driver's licenses and vehicle registrations into a filled intake form.
 
 How the hub works:
-- An agent enters a person as an Applicant, fills the one-page Rhino intake form (personal and commercial auto), then quotes them in EZLynx. The agent can mark an applicant Quoted, or Lost with a reason and an optional date to requote.
+- An agent enters a person as an Applicant, fills the one-page Rhino intake form (personal and commercial auto), then quotes them in EZLynx. The agent can mark an applicant Lost with a reason and an optional date to requote. There is no Quoted stage.
 - An applicant becomes a Client only when the owner uploads the EZLynx new business report that lists their policy. Agents and this assistant cannot make someone a client or add policies. A client with no active policy left becomes a Former client.
 - Every contact has a referral code (shown on their page, like RH-ABC2345) to share with family and friends. Entering that code when adding a new applicant records who referred them. The owner reviews referrals each month on the Referrals page and sends the referrer a gift card.
 - Each contact has a Documents section for licenses, registrations and other files, and a timeline of notes.
@@ -64,7 +64,7 @@ function makeTools(u: SessionUser, uploads: Upload[]) {
       description: "Search this agent's applicants and clients by name, phone, email, carrier or policy number. Returns up to 25 matches with their ID, stage and policies. Call with an empty query to list the most recently updated contacts.",
       inputSchema: z.object({
         query: z.string().max(100).describe("Part of a name, phone, email, carrier or policy number. Empty for the most recent."),
-        stage: z.enum(["APPLICANT", "QUOTED", "CLIENT", "LOST", "FORMER"]).optional(),
+        stage: z.enum(["APPLICANT", "CLIENT", "LOST", "FORMER"]).optional(),
       }),
       run: async ({ query, stage }) => {
         const q = query.trim();
@@ -250,9 +250,9 @@ function makeTools(u: SessionUser, uploads: Upload[]) {
 
     betaZodTool({
       name: "set_stage",
-      description: "Mark an applicant as Applicant, Quoted or Lost. Quoted needs the intake form on file. Lost needs a reason. Clients cannot be changed here: client status comes only from the EZLynx report the owner uploads.",
+      description: "Mark an applicant as Lost, or put a lost one back to Applicant. Lost needs a reason. Clients cannot be changed here: client status comes only from the EZLynx report the owner uploads.",
       inputSchema: z.object({
-        contact_id: z.string(), stage: z.enum(["APPLICANT", "QUOTED", "LOST"]),
+        contact_id: z.string(), stage: z.enum(["APPLICANT", "LOST"]),
         lost_reason: z.enum(LOST_REASONS as [string, ...string[]]).optional(),
         requote_date: z.string().optional().describe("YYYY-MM-DD, when to try this lost quote again."),
       }),
@@ -261,7 +261,6 @@ function makeTools(u: SessionUser, uploads: Upload[]) {
         if (!c) return missing;
         if (!MANUAL_STAGES.includes(stage)) return "That stage cannot be set by hand.";
         if (c.stage === "CLIENT") return "This contact has an active policy, so they stay a client.";
-        if (stage === "QUOTED" && !c.intake) return "Fill the intake form before marking this applicant as quoted.";
         if (stage === "LOST" && !lost_reason) return "Ask the agent why it was lost, then pass lost_reason.";
         await db.contact.update({ where: { id: c.id }, data: { stage, lostReason: stage === "LOST" ? lost_reason : null, requoteDate: stage === "LOST" ? parseDate(requote_date) : null } });
         await logActivity(c.id, u.id, "stage", `Moved to ${stageLabel(stage)}${stage === "LOST" ? `: ${lost_reason}` : ""}`);

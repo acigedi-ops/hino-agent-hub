@@ -27,7 +27,7 @@ export default async function Pipeline({ searchParams }: { searchParams: Promise
         <h1 className="h1">{only ? stageLabel(only) : "Applicants"}</h1>
         <Link href="/contacts/new" className="btn-gold">+ New applicant</Link>
       </div>
-      <div className="grid grid-cols-3 gap-2 md:grid-cols-5 md:gap-3">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
         {STAGES.map((s) => (
           <Link key={s.key} href={s.key === "CLIENT" ? "/clients" : `/pipeline?stage=${s.key}`} className={`card p-3 hover:border-gold-dark ${only === s.key ? "border-gold-dark" : ""}`}>
             <div className="text-xl font-bold">{byStage.find((b) => b.stage === s.key)?._count ?? 0}</div>
@@ -43,7 +43,7 @@ export default async function Pipeline({ searchParams }: { searchParams: Promise
         <Link className="btn-quiet" href="/pipeline?stage=LOST">Lost</Link>
         <Link className="btn-quiet" href="/pipeline?stage=FORMER">Former clients</Link>
       </form>
-      <div className={`grid gap-3 ${only ? "" : "md:grid-cols-2"}`}>
+      <div className="grid gap-3">
         {columns.map((stage) => {
           const items = contacts.filter((c) => c.stage === stage);
           return (
@@ -51,7 +51,7 @@ export default async function Pipeline({ searchParams }: { searchParams: Promise
               <div className="mb-2 flex items-center justify-between px-1">
                 <StageBadge stage={stage} /><span className="text-xs font-semibold text-muted">{items.length}</span>
               </div>
-              <div className="space-y-2">
+              <div className="grid gap-2 md:grid-cols-2">
                 {items.length === 0 && <p className="px-1 py-3 text-xs text-muted">Nobody here.</p>}
                 {items.map((c) => (
                   <Link key={c.id} href={`/contacts/${c.id}`} className="card block p-3 hover:border-gold-dark">

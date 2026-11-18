@@ -13,7 +13,7 @@ export type TaskView = {
 
 const TONE: Record<string, string> = {
   manual: "bg-black/[0.06] text-ink", requote: "bg-blue-50 text-blue-800", renewal: "bg-amber-50 text-amber-800",
-  cancel_notice: "bg-red-50 text-red-800", cancelled: "bg-red-50 text-red-800",
+  cancel_notice: "bg-red-50 text-red-800", cancelled: "bg-red-50 text-red-800", quote: "bg-green-50 text-green-800",
 };
 
 /** One task with its Done and push-back buttons. `today` is the office's date, so overdue is judged the same everywhere. */
@@ -29,6 +29,7 @@ export function TaskRow({ t, today, showAgent, showContact = true }: { t: TaskVi
           <span className={!t.doneAt && late > 0 ? "font-semibold text-red-700" : !t.doneAt && late === 0 ? "font-semibold text-ink" : ""}>{due}</span>
           {showContact && t.contact && <Link className="font-semibold text-ink underline" href={`/contacts/${t.contact.id}`}>{t.contact.fullName}</Link>}
           {showContact && t.contact?.phone && <span>{t.contact.phone}</span>}
+          {t.kind === "quote" && <Link className="font-semibold text-ink underline" href="/quotes">Open Quote Desk</Link>}
           {t.policy && <span>{fmtMoney(Number(t.policy.premium))} premium</span>}
           {showAgent && t.assignee && <span>Agent: {t.assignee.name}</span>}
         </div>

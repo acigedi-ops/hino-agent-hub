@@ -58,6 +58,8 @@ model User {
   commissionUploads    CommissionStatement[] @relation("CommissionUploader")
   tasksCreated      Task[] @relation("TaskCreator")
   assistantChats    AssistantChat[]
+  quoteRequests     QuoteRequest[]
+  quoteNotes        QuoteNote[]
 }
 
 model Session {
@@ -460,4 +462,58 @@ model CommissionLine {
   amount       Decimal  @db.Decimal(12, 2)
 
   @@index([statementId, position])
+}
+
+/// A commercial (business insurance) quote an agent asks the owner for on the Quote Desk.
+model QuoteRequest {
+  id            String    @id @default(cuid())
+  agentId       String
+  agent         User      @relation(fields: [agentId], references: [id])
+  businessName  String
+  /// SENT (waiting on the owner), NEED_INFO (waiting on the agent), QUOTED, ACCEPTED or NOT_TAKEN.
+  status        String    @default("SENT")
+  /// What the agent filled in on the request form.
+  data          Json
+  carrier       String?
+  premium       Decimal?  @db.Decimal(12, 2)
+  downPayment   Decimal?  @db.Decimal(12, 2)
+  expiresOn     DateTime? @db.Date
+  quotedAt      DateTime?
+  outcomeReason String?
+  closedAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  files         QuoteFile[]
+  notes         QuoteNote[]
+
+  @@index([agentId, status])
+  @@index([status, createdAt])
+}
+
+model QuoteFile {
+  id           String       @id @default(cuid())
+  requestId    String
+  request      QuoteRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  uploadedById String
+  /// True for the quote the owner attaches; false for what the agent sent in.
+  isQuote      Boolean      @default(false)
+  filename     String
+  mimeType     String
+  size         Int
+  data         Bytes
+  createdAt    DateTime     @default(now())
+
+  @@index([requestId, createdAt])
+}
+
+model QuoteNote {
+  id        String       @id @default(cuid())
+  requestId String
+  request   QuoteRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  text      String
+  createdAt DateTime     @default(now())
+
+  @@index([requestId, createdAt])
 }

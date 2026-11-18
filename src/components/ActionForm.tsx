@@ -36,7 +36,16 @@ export function ActionForm({
       const data = new FormData(e.currentTarget);
       // Photos are made smaller (and iPhone HEIC pictures become JPG) before they are sent.
       const photos = [...data.entries()].filter((x): x is [string, File] => x[1] instanceof File && x[1].size > 0);
-      if (photos.length) { setPreparing(true); try { for (const [k, f] of photos) data.set(k, await shrinkPhoto(f)); } finally { setPreparing(false); } }
+      if (photos.length) {
+        setPreparing(true);
+        try {
+          // A box that takes several files has them all under one name, so each name is emptied once and filled again.
+          const ready: [string, File][] = [];
+          for (const [k, f] of photos) ready.push([k, await shrinkPhoto(f)]);
+          for (const k of new Set(ready.map((x) => x[0]))) data.delete(k);
+          for (const [k, f] of ready) data.append(k, f);
+        } finally { setPreparing(false); }
+      }
       sent.current = true; startTransition(() => run(data));
     }} className={className}>
       {children}

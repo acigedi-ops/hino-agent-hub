@@ -3,13 +3,14 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { unreadCount } from "@/lib/messages";
 import { dueCount } from "@/lib/tasks";
+import { quoteWaiting } from "@/lib/quotes";
 import { logoutAction } from "@/app/actions";
 import { MobileNav } from "@/components/MobileNav";
 import { StackTables } from "@/components/StackTables";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser();
-  const [unread, due] = await Promise.all([unreadCount(u.id), dueCount(u)]);
+  const [unread, due, quotes] = await Promise.all([unreadCount(u.id), dueCount(u), quoteWaiting(u)]);
   const admin = u.role === "ADMIN";
   // The owner's menu is left as it is. Agents get a shorter one: Tasks and Inbox are one page (To do), and My documents
   // and My account are one page (My profile).
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/inbox", label: "Inbox", badge: unread, what: "unread" },
     { href: "/pipeline", label: "Applicants" },
     { href: "/clients", label: "Clients" },
+    { href: "/quotes", label: "Quote Desk", badge: quotes, what: "waiting on you" },
     { href: "/admin/scoreboard", label: "Scoreboard" }, { href: "/admin/import", label: "Policy report" }, { href: "/admin/commissions", label: "Commission upload" }, { href: "/admin/referrals", label: "Referrals" }, { href: "/admin/agents", label: "Agents" }, { href: "/admin/documents", label: "Agent documents" },
     { href: "/fees", label: "Agency fee" },
     { href: "/commissions", label: "Commissions" },
@@ -32,6 +34,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     { href: "/tasks", label: "To do", badge: due + unread, what: "to do" },
     { href: "/pipeline", label: "Applicants" },
     { href: "/clients", label: "Clients" },
+    { href: "/quotes", label: "Quote Desk", badge: quotes, what: "waiting on you" },
     { href: "/fees", label: "Agency fee" },
     { href: "/commissions", label: "My commissions" },
     { href: "/sources", label: "Referral sources" },

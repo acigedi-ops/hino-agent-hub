@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { fmtDate } from "@/lib/contacts";
 
-export const TASK_KINDS = { manual: "Follow-up", requote: "Requote", renewal: "Renewal", cancel_notice: "Cancel notice", cancelled: "Cancelled", sold_check: "Check policy" } as const;
+export const TASK_KINDS = { manual: "Follow-up", requote: "Requote", renewal: "Renewal", cancel_notice: "Cancel notice", cancelled: "Cancelled", sold_check: "Check policy", quote: "Quote Desk" } as const;
 export type TaskKind = keyof typeof TASK_KINDS;
 /** The renewal and cancellation work list. */
 export const RETENTION_KINDS: TaskKind[] = ["renewal", "cancel_notice", "cancelled"];

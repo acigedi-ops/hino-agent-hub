@@ -153,7 +153,7 @@ export function AssistantBox({
           </p>
         )
       ) : (
-        <div ref={log} className={`overflow-y-auto pr-1 ${page ? "min-h-0 flex-1" : "max-h-[60vh] md:max-h-[34rem]"}`} aria-live="polite">
+        <div ref={log} className={`overflow-y-auto pr-1 ${page ? "min-h-0 flex-1" : "max-h-[70vh] md:max-h-[42rem]"}`} aria-live="polite">
           <div className={page ? "mx-auto max-w-3xl space-y-4 py-2" : "space-y-3"}>
             {turns.map((t, i) => (
               <div key={i} className={t.role === "user" ? "flex justify-end" : "flex justify-start"}>
@@ -168,7 +168,7 @@ export function AssistantBox({
       )}
       <form className={page ? "mx-auto w-full max-w-3xl space-y-2" : "space-y-2"} onSubmit={(e) => { e.preventDefault(); send(); }}>
         <textarea
-          className="input" rows={page ? 2 : 3} value={text} onChange={(e) => setText(e.target.value)} aria-label="Message to the assistant"
+          className="input" rows={page ? 2 : 5} value={text} onChange={(e) => setText(e.target.value)} aria-label="Message to the assistant"
           placeholder="Ask a question, or attach a license or registration..."
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
         />

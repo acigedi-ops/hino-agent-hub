@@ -103,12 +103,7 @@ export default async function Home() {
         </div>
       </details>
 
-      <details className="group space-y-2 [&_section_h2]:hidden">
-        <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg border border-line bg-white px-4 py-3 [&::-webkit-details-marker]:hidden">
-          <h2 className="h2">Ask the assistant</h2><span className="ml-auto text-xs font-semibold text-muted group-open:hidden">Show</span><span className="ml-auto hidden text-xs font-semibold text-muted group-open:inline">Hide</span>
-        </summary>
-        <AssistantBox enabled={assistantEnabled()} firstName={u.name.split(" ")[0]} />
-      </details>
+      <AssistantBox enabled={assistantEnabled()} firstName={u.name.split(" ")[0]} />
     </div>
   );
 }

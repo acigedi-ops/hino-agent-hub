@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const [unread, due] = await Promise.all([unreadCount(u.id), dueCount(u)]);
   const nav: { href: string; label: string; badge?: number }[] = [
     { href: "/", label: "Home" },
+    { href: "/ai-assistant", label: "AI Assistant" },
     { href: "/tasks", label: "Tasks", badge: due },
     { href: "/inbox", label: "Inbox", badge: unread },
     { href: "/pipeline", label: "Applicants" },

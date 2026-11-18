@@ -146,6 +146,7 @@ test("referral codes are read however they are typed", async () => {
   assert.equal(cleanCode(` rh ${code} `), code);
   assert.equal(cleanCode(code), code);
   assert.equal(cleanCode("RHABCDE"), "RHABCDE");
+  assert.equal(cleanCode(`rs-${code.toLowerCase()}`), code, "a business code is read the same way");
   assert.equal(cleanCode("abc"), null);
 });
 

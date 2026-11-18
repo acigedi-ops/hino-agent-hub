@@ -277,6 +277,8 @@ model Message {
 model ReferralSource {
   id          String    @id @default(cuid())
   name        String
+  /// The code agents enter on a new applicant to credit this business. Shown as RS-XXXXXXX.
+  code        String    @unique
   kind        String
   contactName String?
   phone       String?

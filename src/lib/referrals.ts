@@ -6,10 +6,12 @@ const LENGTH = 7;
 
 export const newReferralCode = () => Array.from({ length: LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
 
-/** Accepts "rh-abc2345", "RH ABC2345" or "abc2345" and returns the stored form, or null if it cannot be a code. */
+/** Accepts "rh-abc2345", "RH ABC2345", "rs-abc2345" (a business code) or "abc2345" and returns the stored form, or null if it cannot be a code. */
 export function cleanCode(input: string): string | null {
-  const c = input.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^RH(?=.{7}$)/, "");
+  const c = input.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^R[HS](?=.{7}$)/, "");
   return c.length === LENGTH ? c : null;
 }
 
 export const showCode = (code: string) => `RH-${code}`;
+/** A business (referral source) code as shown to people. */
+export const showSourceCode = (code: string) => `RS-${code}`;

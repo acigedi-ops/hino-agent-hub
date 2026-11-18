@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { showSourceCode } from "@/lib/referrals";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
@@ -27,7 +28,14 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
     <div className="max-w-4xl space-y-6">
       <div>
         <Link href="/sources" className="inline-flex min-h-10 items-center text-sm underline md:min-h-0">Back to referral sources</Link>
-        <h1 className="h1 mt-1">{src.name}</h1>
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+          <h1 className="h1">{src.name}</h1>
+          <div className="rounded-md border border-line bg-white px-3 py-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted">Referral code</div>
+            <div className="select-all text-xl font-bold tracking-wider">{showSourceCode(src.code)}</div>
+          </div>
+        </div>
+        <p className="mt-1 max-w-2xl text-xs text-muted">Give this code to the business. Enter it in the Referral code box when you add someone they send, and that person is filed here.</p>
         <p className="text-sm text-muted">{[src.kind, src.contactName, src.phone, src.email, src.address].filter(Boolean).join(" · ")}</p>
         {src.notes && <p className="mt-1 whitespace-pre-wrap text-sm">{src.notes}</p>}
         <p className="mt-1 text-xs text-muted">Added by {src.createdBy.name} on {fmtDate(src.createdAt)}.{admin ? "" : " You see your own applicants and clients here."}</p>

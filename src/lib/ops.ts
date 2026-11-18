@@ -23,10 +23,26 @@ export async function findDuplicate(phoneNorm: string | null, emailNorm: string 
 
 export type NewContact = { fullName: string; phone?: string; email?: string; type?: string; leadSource?: string; priority?: string; agentId?: string; referralCode?: string; referralSourceId?: string; street?: string; city?: string; state?: string; zip?: string };
 
-/** Finds whose referral code this is. Codes work across all agents, since a client may refer someone to a different agent. */
-export async function findReferrer(code: string) {
+/**
+ * Finds what a typed referral code belongs to: a client (their personal code) or a business on the Referral sources list.
+ * Returns null when the code matches nothing.
+ */
+export async function findReferral(code: string) {
   const c = cleanCode(code);
-  return c ? db.contact.findUnique({ where: { referralCode: c }, select: { id: true, fullName: true } }) : null;
+  if (!c) return null;
+  const person = await db.contact.findUnique({ where: { referralCode: c }, select: { id: true, fullName: true } });
+  if (person) return { person, source: null };
+  const source = await db.referralSource.findUnique({ where: { code: c }, select: { id: true, name: true } });
+  return source ? { person: null, source } : null;
+}
+
+/** A new code for a business that no client and no other business already has. */
+export async function newSourceCode(): Promise<string> {
+  for (;;) {
+    const code = newReferralCode();
+    const [a, b] = await Promise.all([db.contact.findUnique({ where: { referralCode: code }, select: { id: true } }), db.referralSource.findUnique({ where: { code }, select: { id: true } })]);
+    if (!a && !b) return code;
+  }
 }
 
 export async function createContactCore(u: SessionUser, n: NewContact, opts: { allowNoPhoneOrEmail?: boolean } = {}): Promise<{ error: string } | { contact: Contact }> {
@@ -52,11 +68,15 @@ export async function createContactCore(u: SessionUser, n: NewContact, opts: { a
   if (n.zip?.trim() && !cleanZip(n.zip)) return { error: "Enter a 5 digit zip code." };
   const state = cleanState(n.state), zip = cleanZip(n.zip);
 
-  const referrer = n.referralCode?.trim() ? await findReferrer(n.referralCode) : null;
-  if (n.referralCode?.trim() && !referrer) return { error: "No one in the hub has that referral code. Check it with the person, or leave it empty." };
+  // The code box takes a client's code or a business's code.
+  const found = n.referralCode?.trim() ? await findReferral(n.referralCode) : null;
+  if (n.referralCode?.trim() && !found) return { error: "No client or business in the hub has that referral code. Check it, or leave it empty." };
+  const referrer = found?.person ?? null;
 
-  const source = n.referralSourceId ? await db.referralSource.findUnique({ where: { id: n.referralSourceId }, select: { id: true, name: true } }) : null;
-  if (n.referralSourceId && !source) return { error: "That referral source no longer exists. Pick another one." };
+  const picked = n.referralSourceId ? await db.referralSource.findUnique({ where: { id: n.referralSourceId }, select: { id: true, name: true } }) : null;
+  if (n.referralSourceId && !picked) return { error: "That referral source no longer exists. Pick another one." };
+  if (picked && found?.source && picked.id !== found.source.id) return { error: `That code belongs to ${found.source.name}, but ${picked.name} is picked as the referral source. Choose one.` };
+  const source = found?.source ?? picked;
 
   let agentId = u.id;
   if (u.role === "ADMIN" && n.agentId) {

@@ -36,8 +36,9 @@ export default async function NewContact() {
           <div><label className="label" htmlFor="referralSourceId">Referral source (if a business sent them)</label>
             <select className="input" id="referralSourceId" name="referralSourceId"><option value="">None</option>{sources.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.kind})</option>)}</select>
             <p className="mt-1 text-xs text-muted">Not in the list? <a className="underline" href="/sources" target="_blank">Add it under Referral sources</a>.</p></div>
-          <div><label className="label" htmlFor="referralCode">Referral code (if a client sent them)</label>
-            <input className="input max-w-48 uppercase" id="referralCode" name="referralCode" placeholder="RH-" autoComplete="off" /></div>
+          <div><label className="label" htmlFor="referralCode">Referral code (from a client or a business)</label>
+            <input className="input max-w-48 uppercase" id="referralCode" name="referralCode" placeholder="RH- or RS-" autoComplete="off" />
+            <p className="mt-1 text-xs text-muted">A client code (RH-) records who referred them. A business code (RS-) files them under that referral source.</p></div>
         </div>
         {u.role === "ADMIN" && (
           <div><label className="label" htmlFor="agentId">Agent</label>

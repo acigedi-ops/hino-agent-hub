@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { showSourceCode } from "@/lib/referrals";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
 import { fmtMoney } from "@/lib/contacts";
@@ -32,13 +33,14 @@ export default async function Sources() {
         {sources.length === 0 ? <p className="p-4 text-sm text-muted">No referral sources yet. Add the first one below.</p> : (
           <table className="w-full">
             <thead><tr className="border-b border-line">
-              <th className="th">Business</th><th className="th">Type</th><th className="th">Contact</th>
+              <th className="th">Business</th><th className="th">Code</th><th className="th">Type</th><th className="th">Contact</th>
               <th className="th">People sent</th><th className="th">Active policies</th><th className="th">Premium</th>
             </tr></thead>
             <tbody>
               {sources.map((s) => (
                 <tr key={s.id} className="border-b border-line last:border-0">
                   <td className="td"><Link className="font-semibold underline" href={`/sources/${s.id}`}>{s.name}</Link></td>
+                  <td className="td whitespace-nowrap font-semibold tracking-wide">{showSourceCode(s.code)}</td>
                   <td className="td">{s.kind}</td>
                   <td className="td">{[s.contactName, s.phone].filter(Boolean).join(" · ")}</td>
                   <td className="td">{sent.get(s.id) ?? 0}</td>

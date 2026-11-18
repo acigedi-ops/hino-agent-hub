@@ -185,8 +185,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               ) : (
                 <ActionForm action={setReferrer} submit="Save" className="flex flex-wrap items-end gap-2 border-t border-line pt-3" buttonClass="btn-quiet">
                   <input type="hidden" name="contactId" value={c.id} />
-                  <div><label className="label" htmlFor="referralCode">Referred by (code)</label>
-                    <input className="input max-w-40 uppercase" id="referralCode" name="referralCode" placeholder="RH-" autoComplete="off" required /></div>
+                  <div><label className="label" htmlFor="referralCode">Referred by (client or business code)</label>
+                    <input className="input max-w-48 uppercase" id="referralCode" name="referralCode" placeholder="RH- or RS-" autoComplete="off" required /></div>
                 </ActionForm>
               )}
               {c.referrals.length > 0 && (

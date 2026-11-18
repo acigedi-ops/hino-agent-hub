@@ -6,7 +6,7 @@ import type { Stage } from "@prisma/client";
 import { db } from "@/lib/db";
 import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut, type SessionUser } from "@/lib/auth";
 import { SOURCE_KINDS, MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
-import { createContactCore, findReferrer, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
+import { createContactCore, findReferral, newSourceCode, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
 import { lookupVin } from "@/lib/vin";
 import { pushDocuments, pushToEzlynx } from "@/lib/ezlynx-sync";
 import { AGENT_DOC_KINDS } from "@/lib/agent-docs";
@@ -130,9 +130,19 @@ export async function reassignContact(_: FormState, f: FormData): Promise<FormSt
 export async function setReferrer(_: FormState, f: FormData): Promise<FormState> {
   const u = await requireUser();
   const c = await ownedContact(u, s(f, "contactId"));
+  const found = await findReferral(s(f, "referralCode"));
+  if (!found) return { error: "No client or business in the hub has that referral code." };
+  if (found.source) {
+    // A business code files this person under that business.
+    if (c.referralSourceId === found.source.id) return { ok: `Already under ${found.source.name}.` };
+    await db.contact.update({ where: { id: c.id }, data: { referralSourceId: found.source.id, leadSource: c.leadSource ?? "Referral" } });
+    await log(c.id, u.id, "referral", `Referral source set to ${found.source.name}`);
+    revalidatePath(`/contacts/${c.id}`);
+    revalidatePath("/sources");
+    return { ok: `Filed under ${found.source.name}.` };
+  }
   if (c.referredById) return { error: "A referrer is already recorded for this contact." };
-  const referrer = await findReferrer(s(f, "referralCode"));
-  if (!referrer) return { error: "No one in the hub has that referral code." };
+  const referrer = found.person;
   if (referrer.id === c.id) return { error: "That is this person's own code." };
   await db.contact.update({ where: { id: c.id }, data: { referredById: referrer.id, referredAt: new Date(), leadSource: c.leadSource ?? "Referral" } });
   await log(c.id, u.id, "referral", `Referred by ${referrer.fullName}`);
@@ -390,7 +400,7 @@ export async function createReferralSource(_: FormState, f: FormData): Promise<F
   if (data.name.length < 2) return { error: "Enter the business name." };
   const dup = await db.referralSource.findFirst({ where: { name: { equals: data.name, mode: "insensitive" } } });
   if (dup) return { error: `${dup.name} is already in the list.` };
-  const src = await db.referralSource.create({ data: { ...data, createdById: u.id } });
+  const src = await db.referralSource.create({ data: { ...data, code: await newSourceCode(), createdById: u.id } });
   revalidatePath("/sources");
   redirect(`/sources/${src.id}`);
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { currentUser } from "@/lib/auth";
+import { db } from "@/lib/db";
 import { MAX_UPLOADS, assistantEnabled, runAssistant } from "@/lib/assistant";
 import { uploadProblem, type Upload } from "@/lib/ops";
 import { readUpload } from "@/lib/upload-read";
@@ -40,7 +41,10 @@ export async function POST(req: Request) {
   if (!text && !files.length) return NextResponse.json({ error: "Type a message or attach a file." }, { status: 400 });
   if (files.length > MAX_UPLOADS) return NextResponse.json({ error: `Attach up to ${MAX_UPLOADS} files at a time.` }, { status: 400 });
 
-  const uploads: Upload[] = [];
+  // Files from earlier messages of this chat that were never saved to Documents come along again, first in the list.
+  await db.assistantUpload.deleteMany({ where: { createdAt: { lt: new Date(now - 24 * 60 * 60 * 1000) } } });
+  const waiting = chat ? await db.assistantUpload.findMany({ where: { chatId: chat.id, userId: u.id }, orderBy: { createdAt: "asc" }, take: MAX_UPLOADS }) : [];
+  const uploads: Upload[] = waiting.map((w) => ({ name: w.name, type: w.type, data: new Uint8Array(w.data) as Uint8Array<ArrayBuffer>, earlier: true, pendingId: w.id }));
   for (const f of files) {
     const upload = await readUpload(f);
     const problem = uploadProblem(upload)
@@ -57,6 +61,11 @@ export async function POST(req: Request) {
   // Saved with the file names only; the files themselves live in the contact's Documents.
   const shown = text || "Please handle the attached files.";
   const savedId = await saveExchange(u.id, chat?.id ?? null, files.length ? `${shown}\n(Attached: ${files.map((f) => f.name).join(", ")})` : shown, reply);
+  // Saved files leave the waiting list; new ones that were not saved join it, so the next message can still file them.
+  const done = uploads.filter((f) => f.saved && f.pendingId).map((f) => f.pendingId!);
+  if (done.length) await db.assistantUpload.deleteMany({ where: { id: { in: done } } });
+  const keep = uploads.filter((f) => !f.saved && !f.pendingId).slice(0, Math.max(0, MAX_UPLOADS - (waiting.length - done.length)));
+  for (const f of keep) await db.assistantUpload.create({ data: { userId: u.id, chatId: savedId, name: f.name, type: f.type, data: f.data } });
   revalidatePath("/", "layout");
   return NextResponse.json({ reply, chatId: savedId });
 }

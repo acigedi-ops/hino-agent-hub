@@ -378,6 +378,20 @@ model AgencyFee {
 }
 
 /// One saved conversation between a person and the hub's AI assistant. Only its owner can see it.
+/// A file attached in the assistant's chat that has not been saved to a contact's Documents yet. Kept one day at most.
+model AssistantUpload {
+  id        String        @id @default(cuid())
+  userId    String
+  chatId    String
+  chat      AssistantChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  name      String
+  type      String
+  data      Bytes
+  createdAt DateTime      @default(now())
+
+  @@index([chatId, createdAt])
+}
+
 model AssistantChat {
   id        String   @id @default(cuid())
   userId    String
@@ -388,6 +402,7 @@ model AssistantChat {
   /// Time of the newest message, for sorting the chat list.
   lastAt    DateTime @default(now())
   turns     AssistantTurn[]
+  uploads   AssistantUpload[]
 
   @@index([userId, lastAt])
 }

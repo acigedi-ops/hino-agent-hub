@@ -5,7 +5,9 @@ import type { SessionUser } from "@/lib/auth";
 import { normalizeEmail, normalizePhone, parseDate, stageLabel } from "@/lib/contacts";
 import { intakeSchema, isValidVin, type IntakeData } from "@/lib/intake";
 import { cleanCode, newReferralCode } from "@/lib/referrals";
-import { DOC_KINDS, DOC_TYPES, MAX_DOC_BYTES, sniffMatches } from "@/lib/documents";
+import { DOC_KINDS, DOC_TYPES, MAX_DOC_BYTES, sniffMatches, standardName } from "@/lib/documents";
+import { vinPdf } from "@/lib/vin-pdf";
+import { lookupVin } from "@/lib/vin";
 import { addressLine, cleanState, cleanZip } from "@/lib/ezlynx-push";
 import { pushDocumentsQuietly, pushQuietly, type PushResult } from "@/lib/ezlynx-sync";
 
@@ -137,10 +139,12 @@ export async function saveIntakeCore(u: SessionUser, c: Contact, raw: unknown, n
     }),
   ]);
   await logActivity(c.id, u.id, "intake", note);
+  await saveVinDocuments(u, c.id, d);
   return { data: d, ezlynx: await pushQuietly(c.id, u.id) };
 }
 
-export type Upload = { name: string; type: string; data: Uint8Array<ArrayBuffer> };
+/** `earlier` marks a file attached in an earlier message of the same chat that is still waiting to be saved; `saved` is set once it is filed. */
+export type Upload = { name: string; type: string; data: Uint8Array<ArrayBuffer>; earlier?: boolean; saved?: boolean; pendingId?: string };
 
 /** Checks a file is one the hub accepts. Returns a message for the person if not. */
 export function uploadProblem(f: Upload): string | null {
@@ -151,9 +155,14 @@ export function uploadProblem(f: Upload): string | null {
   return null;
 }
 
-export async function saveDocumentCore(u: SessionUser, contactId: string, f: Upload, kindWanted: string) {
+/**
+ * Saves a file to a contact's Documents under the standard name. `about` is who or what the file is about when that is
+ * not the contact (a spouse's license, a vehicle); left out, the contact's own name is used.
+ */
+export async function saveDocumentCore(u: SessionUser, contactId: string, f: Upload, kindWanted: string, about?: string) {
   const kind = DOC_KINDS.includes(kindWanted) ? kindWanted : "Other";
-  const filename = f.name.replace(/[^\w.\- ()]+/g, "_").slice(0, 120) || "document";
+  const who = about?.trim() || (await db.contact.findUnique({ where: { id: contactId }, select: { fullName: true } }))?.fullName || "";
+  const filename = standardName(kind, who, f.type);
   const doc = await db.document.create({
     data: { contactId, uploadedById: u.id, kind, filename, mimeType: f.type, size: f.data.length, data: f.data },
     select: { id: true },
@@ -161,4 +170,23 @@ export async function saveDocumentCore(u: SessionUser, contactId: string, f: Upl
   await logActivity(contactId, u.id, "document", `Document added: ${kind} (${filename})`);
   await pushDocumentsQuietly(contactId);
   return { id: doc.id, kind, filename };
+}
+
+/** Every vehicle with a VIN gets a one-page PDF with just that VIN, filed under Other documents. Each VIN is filed once. */
+async function saveVinDocuments(u: SessionUser, contactId: string, d: IntakeData) {
+  try {
+    const have = (await db.document.findMany({ where: { contactId, kind: "VIN" }, select: { filename: true } })).map((x) => x.filename);
+    for (const v of d.vehicles) {
+      const vin = v.vin.trim().toUpperCase();
+      if (!isValidVin(vin) || have.some((f) => f.includes(`(${vin.slice(-6)})`))) continue;
+      // The intake form may hold the VIN alone; the national database then gives the year, make and model for the name.
+      const known = v.year && v.make ? v : { ...v, ...((await lookupVin(vin)) ?? {}) };
+      const car = [known.year, known.make, known.model].filter(Boolean).join(" ") || "Vehicle";
+      const filename = standardName("VIN", `${car} (${vin.slice(-6)})`, "application/pdf");
+      const data = await vinPdf(vin, car);
+      await db.document.create({ data: { contactId, uploadedById: u.id, kind: "VIN", filename, mimeType: "application/pdf", size: data.length, data } });
+      await logActivity(contactId, u.id, "document", `Document added: VIN (${filename})`);
+      have.push(filename);
+    }
+  } catch (e) { console.error("VIN document failed", e); }
 }

@@ -86,8 +86,8 @@ export function linkIsValid(what: "doc" | "intake", id: string, url: URL) {
 export async function intakePdf(c: { fullName: string; intake: { data: unknown } | null }) {
   const template = await readFile(path.join(process.cwd(), "public/forms/rhino-intake-template.pdf"));
   const bytes = await fillIntakePdf(template, c.intake ? parseIntake(c.intake.data) : emptyIntake());
-  const name = c.fullName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "client";
-  return { bytes, filename: `Rhino-Intake-${name}.pdf` };
+  const name = c.fullName.replace(/[^\w.\- ()]+/g, " ").replace(/\s+/g, " ").trim() || "client";
+  return { bytes, filename: `Intake form - ${name}.pdf` };
 }
 
 /**
@@ -109,21 +109,25 @@ export async function pushDocuments(contactId: string): Promise<number> {
     hub_contact_id: c.id, type: c.type === "COMMERCIAL" ? "Commercial" : "Personal",
     first_name: name?.first ?? "", last_name: name?.last ?? "",
     business_name: c.type === "COMMERCIAL" ? ((c.intake && parseIntake(c.intake.data).text.business_name) || c.fullName) : "",
-    zip: c.zip ?? "", email: c.email ?? "", mobile_phone: c.phone ?? "", folder: "Rhino Agent Portal",
+    // No zip: EZLynx corrects addresses, so a search by the zip the hub holds often finds nobody. The Zap then searches by name alone.
+    zip: "", email: c.email ?? "", mobile_phone: c.phone ?? "", folder: "Rhino Agent Portal",
   };
   let sent = 0;
 
   if (c.intake && !c.ezlynxIntakeSentAt) {
     const claimed = await db.contact.updateMany({ where: { id: c.id, ezlynxIntakeSentAt: null }, data: { ezlynxIntakeSentAt: new Date() } });
     if (claimed.count) {
-      const why = await post(hook, { ...who, document_name: "Rhino intake form", file_name: (await intakePdf(c)).filename, file_url: fileLink("intake", c.id) });
+      const why = await post(hook, { ...who, document_name: "Intake form", file_name: (await intakePdf(c)).filename.replace(/^Intake form - /, ""), file_url: fileLink("intake", c.id) });
       if (why) await db.contact.update({ where: { id: c.id }, data: { ezlynxIntakeSentAt: null } }); else sent++;
     }
   }
   for (const d of c.documents) {
     const claimed = await db.document.updateMany({ where: { id: d.id, ezlynxSentAt: null }, data: { ezlynxSentAt: new Date() } });
     if (!claimed.count) continue;
-    const why = await post(hook, { ...who, document_name: d.kind, file_name: d.filename, file_url: fileLink("doc", d.id) });
+    // The Zap names the file "document_name - file_name". A standard name such as "DL - Maria Lopez.jpg" is split so it arrives unchanged.
+    const cut = d.filename.indexOf(" - ");
+    const named = cut > 0 ? { document_name: d.filename.slice(0, cut), file_name: d.filename.slice(cut + 3) } : { document_name: d.kind, file_name: d.filename };
+    const why = await post(hook, { ...who, ...named, file_url: fileLink("doc", d.id) });
     if (why) { await db.document.update({ where: { id: d.id }, data: { ezlynxSentAt: null } }); break; }
     sent++;
   }

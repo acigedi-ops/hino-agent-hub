@@ -6,7 +6,18 @@ export const REQUIRED_DOC_HINTS: Record<(typeof REQUIRED_DOCS)[number], string> 
   "ID cards": "The insurance ID cards for each policy.",
   "Signed fee disclosure": "The agency fee disclosure signed by the client.",
 };
-export const OTHER_DOC_KINDS = ["Driver's license", "Registration", "Signed form", "Other"];
+export const OTHER_DOC_KINDS = ["Driver's license", "Registration", "VIN", "Signed form", "Other"];
+/** The short word each file name starts with, so every file reads the same way: "DL - Maria Lopez.jpg", "VIN - 2021 BMW M3.pdf". */
+const NAME_PREFIX: Record<string, string> = {
+  "Driver's license": "DL", Registration: "Registration", VIN: "VIN", "Signed form": "Signed form", Other: "Other",
+  "Agency fee receipt": "Fee receipt", "Signed dec page": "Dec page", "ID cards": "ID cards", "Signed fee disclosure": "Fee disclosure",
+};
+const EXT: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic" };
+/** Builds the standard file name from the kind of document and who or what it is about (a person, or a vehicle such as "2021 BMW M3"). */
+export function standardName(kind: string, about: string, mime: string): string {
+  const clean = about.replace(/[^\w.\- ()]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "document";
+  return `${NAME_PREFIX[kind] ?? "Other"} - ${clean}.${EXT[mime] ?? "pdf"}`;
+}
 export const DOC_KINDS: string[] = [...REQUIRED_DOCS, ...OTHER_DOC_KINDS];
 /** Which of the required documents a file is still missing, given the kinds it has. */
 export const missingDocs = (kinds: Iterable<string>) => { const have = new Set(kinds); return REQUIRED_DOCS.filter((k) => !have.has(k)); };

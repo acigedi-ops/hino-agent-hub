@@ -28,6 +28,9 @@ body {
   .td { @apply px-3 py-2 text-sm; }
 }
 
+/* A file opened view only (another agent's client): no forms. The server refuses the changes too. */
+[data-ro] form { display: none; }
+
 /* Phones: bigger type and tap targets, and tables shown as a list of cards (see StackTables). */
 @media (max-width: 767px) {
   .input { font-size: 1rem; min-height: 2.75rem; }

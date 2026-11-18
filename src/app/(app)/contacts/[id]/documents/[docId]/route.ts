@@ -1,11 +1,11 @@
 import { db } from "@/lib/db";
-import { contactScope, currentUser } from "@/lib/auth";
+import { viewScope, currentUser } from "@/lib/auth";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string; docId: string }> }) {
   const u = await currentUser();
   if (!u) return new Response("Sign in first", { status: 401 });
   const { id, docId } = await params;
-  const d = await db.document.findFirst({ where: { id: docId, contactId: id, contact: contactScope(u) } });
+  const d = await db.document.findFirst({ where: { id: docId, contactId: id, contact: viewScope(u) } });
   if (!d) return new Response("Not found", { status: 404 });
   await db.activity.create({ data: { contactId: id, userId: u.id, kind: "document", text: `Document opened: ${d.kind} (${d.filename})` } });
   return new Response(Buffer.from(d.data), {

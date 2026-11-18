@@ -65,6 +65,15 @@ export async function requireAdmin(): Promise<SessionUser> {
 /** Prisma filter limiting contacts to what this user may see: agents see their own, the owner sees all. */
 export const contactScope = (u: SessionUser) => (u.role === "ADMIN" ? {} : { agentId: u.id });
 
+/**
+ * What a person may open to read. Agents can change only their own contacts (contactScope), but they can look at
+ * any client or former client in the agency, so they can check whether someone is already with Rhino.
+ * Other agents' applicants and quotes stay private.
+ */
+export const viewScope = (u: SessionUser) =>
+  u.role === "ADMIN" ? {} : { OR: [{ agentId: u.id }, { stage: { in: ["CLIENT", "FORMER"] as ("CLIENT" | "FORMER")[] } }] };
+export const canChange = (u: SessionUser, agentId: string) => u.role === "ADMIN" || agentId === u.id;
+
 const SERVICE_EMAIL = "assistant@rhino.hub";
 const SERVICE_HOURS = 2;
 

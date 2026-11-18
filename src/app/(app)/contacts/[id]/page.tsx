@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { contactScope, requireUser } from "@/lib/auth";
+import { canChange, requireUser, viewScope } from "@/lib/auth";
 import { LOST_REASONS, MANUAL_STAGES, POLICY_LINES, daysUntil, fmtDate, fmtMoney, stageLabel } from "@/lib/contacts";
 import { addNote, addPolicy, addTask, deleteDocument, sendToEzlynx, resendIntakeToEzlynx, reassignContact, setReferralSource, setPolicyStatus, setReferrer, setStage, uploadDocument } from "@/app/actions";
 import { showCode } from "@/lib/referrals";
@@ -18,7 +18,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   const u = await requireUser();
   const { id } = await params;
   const c = await db.contact.findFirst({
-    where: { id, ...contactScope(u) },
+    where: { id, ...viewScope(u) },
     include: {
       agent: true, intake: { select: { updatedAt: true } },
       tasks: { where: { OR: [{ doneAt: null }, { doneAt: { gte: new Date(Date.now() - 30 * 864e5) } }] }, orderBy: [{ doneAt: { sort: "desc", nulls: "first" } }, { dueOn: "asc" }], take: 30, include: { assignee: { select: { name: true } }, policy: { select: { premium: true, expirationDate: true } } } },
@@ -32,6 +32,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
     },
   });
   if (!c) notFound();
+  /** Another agent's client: everything can be read, nothing can be changed. The server actions refuse as well. */
+  const ro = !canChange(u, c.agentId);
   const agents = u.role === "ADMIN" ? await db.user.findMany({ where: { active: true }, orderBy: { name: "asc" } }) : [];
   const sources = await db.referralSource.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, kind: true } });
   const isClient = c.stage === "CLIENT";
@@ -55,7 +57,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   const see = (agentId: string) => u.role === "ADMIN" || agentId === u.id;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-ro={ro ? "" : undefined}>
+      {ro && <p className="rounded-md border border-gold-dark bg-gold/15 px-3 py-2 text-sm"><span className="font-semibold">View only.</span> This is {c.agent.name}&apos;s client, so you can look at the file but not change it.</p>}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex flex-wrap items-center gap-2"><h1 className="h1">{c.fullName}</h1><StageBadge stage={c.stage} /></div>
@@ -66,14 +69,14 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           <p className="text-xs text-muted">Agent: {c.agent.name}{c.leadSource ? ` · Source: ${c.leadSource}` : ""}{c.priority ? ` · Priority: ${c.priority}` : ""}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link href={`/contacts/${c.id}/intake`} className="btn-gold">{c.intake ? "Open intake form" : "Fill intake form"}</Link>
+          {!ro && <Link href={`/contacts/${c.id}/intake`} className="btn-gold">{c.intake ? "Open intake form" : "Fill intake form"}</Link>}
           {c.intake && <a href={`/contacts/${c.id}/intake/pdf`} target="_blank" className="btn-quiet">Intake PDF</a>}
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
-          <section className="space-y-2">
+          {!ro && <section className="space-y-2">
             <h2 className="h2">Stage</h2>
             <div className="card space-y-3">
               {isClient ? (
@@ -105,7 +108,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                 </ActionForm>
               )}
             </div>
-          </section>
+          </section>}
 
           <section className="space-y-2">
             <h2 className="h2">Policies</h2>
@@ -142,7 +145,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               </details>}
             </div>
           </section>
-          <section className="space-y-2">
+          {!ro && <section className="space-y-2">
             <h2 className="h2">Agency fee</h2>
             <div className="card space-y-3 text-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -159,7 +162,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                 </div>
               ))}
             </div>
-          </section>
+          </section>}
           <section className="space-y-2">
             <h2 className="h2">Referrals</h2>
             <div className="card space-y-3 text-sm">
@@ -168,9 +171,9 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted">Their referral code</div>
                   <div className="select-all text-xl font-bold tracking-wider">{c.referralCode ? showCode(c.referralCode) : "None yet"}</div>
                 </div>
-                <p className="max-w-xs text-xs text-muted">Give this code to {c.fullName.split(" ")[0]} to share with family and friends. Enter it when you add the person they send.</p>
+                <p className="max-w-xs text-xs text-muted" hidden={ro}>Give this code to {c.fullName.split(" ")[0]} to share with family and friends. Enter it when you add the person they send.</p>
               </div>
-              <div className="border-t border-line pt-3">
+              <div className="border-t border-line pt-3" hidden={ro && !c.referralSource}>
                 {c.referralSource && <p className="mb-2">Sent by <Link className="font-semibold underline" href={`/sources/${c.referralSource.id}`}>{c.referralSource.name}</Link> ({c.referralSource.kind}).</p>}
                 <ActionForm action={setReferralSource} submit="Save" className="flex flex-wrap items-end gap-2" buttonClass="btn-quiet">
                   <input type="hidden" name="contactId" value={c.id} />
@@ -244,7 +247,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
         </div>
 
         <div className="space-y-6">
-        <section className="space-y-2">
+        {!ro && <section className="space-y-2">
           <h2 className="h2">EZLynx</h2>
           <div className="card space-y-2 text-sm">
             {c.ezlynxSentAt ? (
@@ -268,8 +271,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
               </>
             )}
           </div>
-        </section>
-        <section className="space-y-2">
+        </section>}
+        {!ro && <section className="space-y-2">
           <h2 className="h2">Follow-ups</h2>
           <div className="card space-y-3">
             <ActionForm action={addTask} submit="Add follow-up" className="flex flex-wrap items-end gap-2" buttonClass="btn-quiet">
@@ -280,7 +283,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             </ActionForm>
             {c.tasks.length > 0 && <div className="-mx-4 -mb-4 border-t border-line">{c.tasks.map((x) => <TaskRow key={x.id} t={x} today={today()} showContact={false} showAgent={u.role === "ADMIN"} />)}</div>}
           </div>
-        </section>
+        </section>}
         <section className="space-y-2">
           <h2 className="h2">Timeline</h2>
           <div className="card space-y-3">

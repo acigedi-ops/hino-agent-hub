@@ -11,8 +11,13 @@ const VIEWS: { key: Period["view"]; label: string }[] = [
 const SHORT: Record<SectionKey, string> = { new: "New business", renewal: "Renewals", adjust: "Adjustments", deduction: "Deductions" };
 const sum = (ns: number[]) => Math.round(ns.reduce((a, n) => a + n, 0) * 100) / 100;
 const tone = (n: number) => (n < 0 ? "text-red-700" : "");
+const SORTS = [
+  { key: "client", label: "Client" }, { key: "company", label: "Company" }, { key: "policy", label: "Policy #" }, { key: "eff", label: "Eff date" },
+  { key: "trans", label: "Trans date" }, { key: "type", label: "Type" }, { key: "premium", label: "Premium" }, { key: "commission", label: "Commission" },
+] as const;
+type SortKey = (typeof SORTS)[number]["key"];
 
-export default async function Commissions({ searchParams }: { searchParams: Promise<{ agent?: string; view?: string; p?: string }> }) {
+export default async function Commissions({ searchParams }: { searchParams: Promise<{ agent?: string; view?: string; p?: string; sort?: string; dir?: string }> }) {
   const u = await requireUser();
   const sp = await searchParams;
   const admin = u.role === "ADMIN";
@@ -41,13 +46,37 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
     include: { statement: { select: { month: true } } },
   });
 
+  // Sorting applies inside each section. With no sort chosen the lines keep the order of the statement.
+  const sort = SORTS.find((x) => x.key === sp.sort)?.key ?? null;
+  const dir = sp.dir === "desc" ? -1 : 1;
+  if (sort) {
+    const val = (l: (typeof lines)[number]): string | number | null => ({
+      client: l.client.toLowerCase(), company: l.company.toLowerCase(), policy: l.policyNumber.toLowerCase(), eff: l.effDate?.getTime() ?? null, trans: l.transDate?.getTime() ?? null,
+      type: l.type.toLowerCase(), premium: l.premium === null ? null : Number(l.premium), commission: Number(l.amount),
+    })[sort];
+    lines.sort((a, b) => {
+      const x = val(a), y = val(b);
+      // Blanks always go last.
+      if (x === null || x === "") return y === null || y === "" ? 0 : 1;
+      if (y === null || y === "") return -1;
+      return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "en", { numeric: true })) * dir;
+    });
+  }
+
   const months = [...new Set(lines.map((l) => l.statement.month))];
   const many = months.length > 1 || view === "week";
   const bySection = (k: SectionKey, rows = lines) => rows.filter((l) => l.section === k);
   const total = (rows: typeof lines) => sum(rows.map((l) => Number(l.amount)));
   const net = total(lines);
 
-  const q = (v: Period["view"], p: string) => `/commissions?${new URLSearchParams({ ...(admin ? { agent: agentId } : {}), view: v, ...(p ? { p } : {}) })}`;
+  const sorted: Record<string, string> = sort ? { sort, dir: dir === -1 ? "desc" : "asc" } : {};
+  const q = (v: Period["view"], p: string) => `/commissions?${new URLSearchParams({ ...(admin ? { agent: agentId } : {}), view: v, ...(p ? { p } : {}), ...sorted })}`;
+  const sortHref = (k: SortKey) => `/commissions?${new URLSearchParams({ ...(admin ? { agent: agentId } : {}), view, ...(key ? { p: key } : {}), sort: k, dir: sort === k && dir === 1 ? "desc" : "asc" })}`;
+  const head = (k: SortKey) => (
+    <th key={k} className="th" aria-sort={sort === k ? (dir === 1 ? "ascending" : "descending") : undefined}>
+      <Link href={sortHref(k)} scroll={false} className="hover:text-ink hover:underline">{SORTS.find((x) => x.key === k)!.label}{sort === k ? (dir === 1 ? " ▲" : " ▼") : ""}</Link>
+    </th>
+  );
   const used = statements.map((s) => s.month);
 
   return (
@@ -141,6 +170,16 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
                 </section>
               )}
 
+              <form className="flex flex-wrap items-center gap-2">
+                {admin && <input type="hidden" name="agent" value={agentId} />}<input type="hidden" name="view" value={view} />{key && <input type="hidden" name="p" value={key} />}
+                <label className="text-sm font-semibold" htmlFor="sort">Sort lines by</label>
+                <select className="input w-auto min-w-0 flex-1 md:flex-none" id="sort" name="sort" defaultValue={sort ?? ""}>
+                  <option value="">Statement order</option>{SORTS.map((x) => <option key={x.key} value={x.key}>{x.label}</option>)}
+                </select>
+                <select className="input w-auto" name="dir" defaultValue={dir === -1 ? "desc" : "asc"} aria-label="Direction"><option value="asc">A to Z, low to high</option><option value="desc">Z to A, high to low</option></select>
+                <button className="btn-quiet">Sort</button>
+              </form>
+
               {SECTIONS.map((s) => {
                 const rows = bySection(s.key);
                 if (!rows.length) return null;
@@ -153,10 +192,9 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
                         <table className="w-full">
                           <thead><tr className="border-b border-line">
                             {deduction ? <><th className="th">Item</th><th className="th">Description</th><th className="th">For</th></> : <>
-                              <th className="th">Client</th><th className="th">Company</th><th className="th">Policy #</th><th className="th">Eff date</th><th className="th">Trans date</th>
-                              <th className="th">Type</th><th className="th">Premium</th></>}
+                              {(["client", "company", "policy", "eff", "trans", "type", "premium"] as const).map(head)}</>}
                             {many && <th className="th">Statement</th>}
-                            <th className="th">{deduction ? "Amount" : "Commission"}</th>
+                            {deduction ? <th className="th">Amount</th> : head("commission")}
                           </tr></thead>
                           <tbody>
                             {rows.map((l) => (

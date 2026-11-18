@@ -67,7 +67,7 @@ export function MobileNav({ nav, name, role, signOut }: { nav: NavItem[]; name: 
 
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-white/10 bg-ink pb-[env(safe-area-inset-bottom)] text-white" aria-label="Main">
         {tabs.map((t) => (
-          <Link key={t.href} href={t.href} aria-current={!open && active(t.href) ? "page" : undefined}
+          <Link key={t.href} href={t.href} onClick={() => setOpen(false)} aria-current={!open && active(t.href) ? "page" : undefined}
             className={`relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${!open && active(t.href) ? "text-gold" : "text-white/75"}`}>
             <Icon name={t.href} />{t.label}
             {t.badge ? <span className="absolute right-[18%] top-1.5"><Badge n={t.badge} label="due" /></span> : null}

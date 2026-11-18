@@ -30,9 +30,7 @@ export const QUOTE_SECTIONS: { title: string; fields: QuoteField[] }[] = [
     { key: "above_4_stories", label: "Any work above 4 stories?", kind: "yesno", construction: true },
   ] },
   { title: "Coverage wanted", fields: [
-    { key: "limits", label: "Limits wanted (for example 1M / 2M)" },
     { key: "start_date", label: "Date coverage should start", kind: "date" },
-    { key: "certificate", label: "Is a certificate needed for a contract?", kind: "yesno" },
   ] },
   { title: "History", fields: [
     { key: "current_carrier", label: "Current carrier (or None)" },

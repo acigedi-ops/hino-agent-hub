@@ -24,7 +24,7 @@ export default async function ConversationPage({ params }: { params: Promise<{ i
   return (
     <div className="max-w-2xl space-y-4">
       <div>
-        <Link href="/inbox" className="inline-flex min-h-10 items-center text-sm underline md:min-h-0">Back to inbox</Link>
+        <Link href="/inbox" className="inline-flex min-h-10 items-center text-sm underline md:min-h-0">{u.role === "ADMIN" ? "Back to inbox" : "Back to messages"}</Link>
         <h1 className="h1 mt-1 break-words">{c.subject}</h1>
         <p className="mt-1 text-sm text-muted">Between {c.members.map((m) => (m.userId === u.id ? "you" : m.user.name)).join(", ")}
           {contact && <> · about <Link className="font-semibold underline" href={`/contacts/${contact.id}`}>{contact.fullName}</Link></>}</p>

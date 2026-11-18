@@ -10,19 +10,32 @@ import { StackTables } from "@/components/StackTables";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser();
   const [unread, due] = await Promise.all([unreadCount(u.id), dueCount(u)]);
-  const nav: { href: string; label: string; badge?: number }[] = [
+  const admin = u.role === "ADMIN";
+  // The owner's menu is left as it is. Agents get a shorter one: Tasks and Inbox are one page (To do), and My documents
+  // and My account are one page (My profile).
+  const nav: { href: string; label: string; badge?: number; what?: string }[] = admin ? [
     { href: "/", label: "Home" },
     { href: "/ai-assistant", label: "AI Assistant" },
-    { href: "/tasks", label: "Tasks", badge: due },
-    { href: "/inbox", label: "Inbox", badge: unread },
+    { href: "/tasks", label: "Tasks", badge: due, what: "due" },
+    { href: "/inbox", label: "Inbox", badge: unread, what: "unread" },
     { href: "/pipeline", label: "Applicants" },
     { href: "/clients", label: "Clients" },
-    ...(u.role === "ADMIN" ? [{ href: "/admin/scoreboard", label: "Scoreboard" }, { href: "/admin/import", label: "Policy report" }, { href: "/admin/commissions", label: "Commission upload" }, { href: "/admin/referrals", label: "Referrals" }, { href: "/admin/agents", label: "Agents" }, { href: "/admin/documents", label: "Agent documents" }] : []),
+    { href: "/admin/scoreboard", label: "Scoreboard" }, { href: "/admin/import", label: "Policy report" }, { href: "/admin/commissions", label: "Commission upload" }, { href: "/admin/referrals", label: "Referrals" }, { href: "/admin/agents", label: "Agents" }, { href: "/admin/documents", label: "Agent documents" },
     { href: "/fees", label: "Agency fee" },
-    { href: "/commissions", label: u.role === "ADMIN" ? "Commissions" : "My commissions" },
+    { href: "/commissions", label: "Commissions" },
     { href: "/sources", label: "Referral sources" },
     { href: "/documents", label: "My documents" },
     { href: "/account", label: "My account" },
+  ] : [
+    { href: "/", label: "Home" },
+    { href: "/ai-assistant", label: "AI Assistant" },
+    { href: "/tasks", label: "To do", badge: due + unread, what: "to do" },
+    { href: "/pipeline", label: "Applicants" },
+    { href: "/clients", label: "Clients" },
+    { href: "/fees", label: "Agency fee" },
+    { href: "/commissions", label: "My commissions" },
+    { href: "/sources", label: "Referral sources" },
+    { href: "/account", label: "My profile" },
   ];
   return (
     <div className="min-h-screen md:flex">
@@ -34,7 +47,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Link href="/"><Image src="/brand/rhino-logo-cropped.png" alt="Rhino Insurance" width={90} height={80} priority className="h-20 w-auto" /></Link>
           <nav className="mt-6 flex flex-col gap-1">
             {nav.map((n) => (
-              <Link key={n.href} href={n.href} className="rounded-md px-3 py-2 text-sm font-medium text-white/85 hover:bg-white/10 hover:text-gold">{n.label}{n.badge ? <span className="ml-2 rounded-full bg-gold px-1.5 py-0.5 text-xs font-bold text-ink" aria-label={`${n.badge} ${n.href === "/tasks" ? "due" : "unread"}`}>{n.badge}</span> : null}</Link>
+              <Link key={n.href} href={n.href} className="rounded-md px-3 py-2 text-sm font-medium text-white/85 hover:bg-white/10 hover:text-gold">{n.label}{n.badge ? <span className="ml-2 rounded-full bg-gold px-1.5 py-0.5 text-xs font-bold text-ink" aria-label={`${n.badge} ${n.what}`}>{n.badge}</span> : null}</Link>
             ))}
           </nav>
         </div>

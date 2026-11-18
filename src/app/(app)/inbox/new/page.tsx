@@ -17,7 +17,7 @@ export default async function NewMessage({ searchParams }: { searchParams: Promi
   return (
     <div className="max-w-2xl space-y-4">
       <div>
-        <Link href="/inbox" className="inline-flex min-h-10 items-center text-sm underline md:min-h-0">Back to inbox</Link>
+        <Link href="/inbox" className="inline-flex min-h-10 items-center text-sm underline md:min-h-0">{u.role === "ADMIN" ? "Back to inbox" : "Back to messages"}</Link>
         <h1 className="h1 mt-1">New message</h1>
       </div>
       <ActionForm action={sendMessage} submit="Send" className="card space-y-3" buttonClass="btn-gold">

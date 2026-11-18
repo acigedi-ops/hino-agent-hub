@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-export type NavItem = { href: string; label: string; badge?: number };
+export type NavItem = { href: string; label: string; badge?: number; what?: string };
 
 const ICONS: Record<string, ReactNode> = {
   "/": <path d="M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10" />,
@@ -31,17 +31,22 @@ export function MobileNav({ nav, name, role, signOut }: { nav: NavItem[]; name: 
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
-  const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/")) || (href === "/pipeline" && path === "/contacts/new");
-  const unread = nav.find((n) => n.href === "/inbox")?.badge;
+  const inbox = nav.find((n) => n.href === "/inbox");
+  const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/")) || (href === "/pipeline" && path === "/contacts/new")
+    // With no Inbox item of its own (agents), messages belong to the To do tab.
+    || (href === "/tasks" && !inbox && (path === "/inbox" || path.startsWith("/inbox/")));
+  const unread = inbox?.badge;
   const tabs = TABS.map((h) => nav.find((n) => n.href === h)!).filter(Boolean);
   const inMenu = !open && !tabs.some((t) => active(t.href)) && nav.some((n) => active(n.href));
   return (
     <div className="md:hidden">
       <header className="flex items-center justify-between bg-ink px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-white">
         <Link href="/" aria-label="Home"><Image src="/brand/rhino-logo-cropped.png" alt="Rhino Insurance" width={90} height={80} priority className="h-10 w-auto" /></Link>
-        <Link href="/inbox" className="relative flex h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-white/90">
-          <Icon name="inbox" />Inbox<Badge n={unread} label="unread" />
-        </Link>
+        {inbox && (
+          <Link href="/inbox" className="relative flex h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-white/90">
+            <Icon name="inbox" />Inbox<Badge n={unread} label="unread" />
+          </Link>
+        )}
       </header>
 
       {open && (
@@ -54,7 +59,7 @@ export function MobileNav({ nav, name, role, signOut }: { nav: NavItem[]; name: 
             {nav.map((n) => (
               <Link key={n.href} href={n.href} onClick={() => setOpen(false)} aria-current={active(n.href) ? "page" : undefined}
                 className={`flex min-h-12 items-center justify-between rounded-md px-3 text-base font-medium ${active(n.href) ? "bg-white/10 text-gold" : "text-white/90"}`}>
-                {n.label}<Badge n={n.badge} label={n.href === "/tasks" ? "due" : "unread"} />
+                {n.label}<Badge n={n.badge} label={n.what ?? ""} />
               </Link>
             ))}
           </nav>
@@ -70,7 +75,7 @@ export function MobileNav({ nav, name, role, signOut }: { nav: NavItem[]; name: 
           <Link key={t.href} href={t.href} onClick={() => setOpen(false)} aria-current={!open && active(t.href) ? "page" : undefined}
             className={`relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${!open && active(t.href) ? "text-gold" : "text-white/75"}`}>
             <Icon name={t.href} />{t.label}
-            {t.badge ? <span className="absolute right-[18%] top-1.5"><Badge n={t.badge} label="due" /></span> : null}
+            {t.badge ? <span className="absolute right-[18%] top-1.5"><Badge n={t.badge} label={t.what ?? "due"} /></span> : null}
           </Link>
         ))}
         <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}

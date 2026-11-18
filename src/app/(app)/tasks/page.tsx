@@ -5,6 +5,7 @@ import { RETENTION_KINDS, addDays, syncAutoTasks, taskScope, today } from "@/lib
 import { addTask } from "@/app/actions";
 import { ActionForm } from "@/components/ActionForm";
 import { TaskRow } from "@/components/TaskRow";
+import { TodoTabs } from "@/components/TodoTabs";
 
 const VIEWS = [
   { key: "all", label: "Everything" },
@@ -39,13 +40,15 @@ export default async function Tasks({ searchParams }: { searchParams: Promise<{ 
   const q = (v: string, a = agent) => `/tasks?view=${v}${a ? `&agent=${a}` : ""}`;
   return (
     <div className="max-w-4xl space-y-5">
-      <div>
-        <h1 className="h1">Tasks</h1>
-        <p className="mt-1 text-sm text-muted">
-          Your follow-ups, plus the ones the hub makes for you: a renewal task for every policy expiring within 30 days, a task for every cancel notice and cancellation on the policy report, and a task when a lost quote&apos;s requote date comes up.
-          {admin ? " As the owner you see every agent's tasks." : ""}
-        </p>
-      </div>
+      {admin ? (
+  <div>
+          <h1 className="h1">Tasks</h1>
+          <p className="mt-1 text-sm text-muted">
+            Your follow-ups, plus the ones the hub makes for you: a renewal task for every policy expiring within 30 days, a task for every cancel notice and cancellation on the policy report, and a task when a lost quote&apos;s requote date comes up.
+            {admin ? " As the owner you see every agent's tasks." : ""}
+          </p>
+        </div>
+      ) : <TodoTabs u={u} active="tasks" />}
       <div className="flex flex-wrap items-center gap-2">
         {VIEWS.map((v) => (
           <Link key={v.key} href={q(v.key)} aria-current={view === v.key ? "page" : undefined}

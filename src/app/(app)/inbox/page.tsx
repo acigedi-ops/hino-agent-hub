@@ -2,6 +2,7 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { fmtWhen } from "@/lib/messages";
+import { TodoTabs } from "@/components/TodoTabs";
 
 export default async function Inbox() {
   const u = await requireUser();
@@ -18,6 +19,7 @@ export default async function Inbox() {
   });
   return (
     <div className="max-w-3xl space-y-4">
+      {u.role === "ADMIN" ? (
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="h1">Inbox</h1>
@@ -25,6 +27,12 @@ export default async function Inbox() {
         </div>
         <Link href="/inbox/new" className="btn-gold">+ New message</Link>
       </div>
+      ) : (
+        <>
+          <TodoTabs u={u} active="messages" />
+          <div><Link href="/inbox/new" className="btn-gold">+ New message</Link></div>
+        </>
+      )}
       <div className="card p-0">
         {rows.length === 0 && <p className="p-4 text-sm text-muted">No messages yet.</p>}
         {rows.map(({ conversation: c, lastReadAt }) => {

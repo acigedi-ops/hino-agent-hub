@@ -1,5 +1,6 @@
 "use client";
-import { startTransition, useActionState, useEffect, useRef } from "react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { shrinkPhoto } from "@/lib/shrink";
 
 export type FormState = { error?: string; ok?: string };
 
@@ -16,6 +17,7 @@ export function ActionForm({
   const [state, run, pending] = useActionState(action, {});
   const form = useRef<HTMLFormElement>(null);
   const sent = useRef(false);
+  const [preparing, setPreparing] = useState(false);
   // After a save, empty the boxes that start out empty (a note, a new task, a chosen file) so a second tap cannot add the same thing twice.
   // Boxes that show a saved value keep it.
   useEffect(() => {
@@ -28,11 +30,19 @@ export function ActionForm({
   }, [state]);
   return (
     // Submitting by hand instead of through `action` keeps what was typed when the action returns an error.
-    <form ref={form} action={run} onSubmit={(e) => { e.preventDefault(); const data = new FormData(e.currentTarget); sent.current = true; startTransition(() => run(data)); }} className={className}>
+    <form ref={form} action={run} onSubmit={async (e) => {
+      e.preventDefault();
+      if (preparing || pending) return;
+      const data = new FormData(e.currentTarget);
+      // Photos are made smaller (and iPhone HEIC pictures become JPG) before they are sent.
+      const photos = [...data.entries()].filter((x): x is [string, File] => x[1] instanceof File && x[1].size > 0);
+      if (photos.length) { setPreparing(true); try { for (const [k, f] of photos) data.set(k, await shrinkPhoto(f)); } finally { setPreparing(false); } }
+      sent.current = true; startTransition(() => run(data));
+    }} className={className}>
       {children}
       {state.error && <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</p>}
       {state.ok && <p role="status" className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">{state.ok}</p>}
-      <div><button className={buttonClass} disabled={pending}>{pending ? "Working..." : submit}</button></div>
+      <div><button className={buttonClass} disabled={pending || preparing}>{pending || preparing ? "Working..." : submit}</button></div>
     </form>
   );
 }

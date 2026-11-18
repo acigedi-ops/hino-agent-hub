@@ -35,8 +35,8 @@ export async function AgentDocs({ userId }: { userId: string }) {
               <select className="input" id="kind" name="kind">{AGENT_DOC_KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
             <div><label className="label" htmlFor="expiresOn">Expires on (license)</label>
               <input className="input" id="expiresOn" name="expiresOn" type="date" /></div>
-            <div><label className="label" htmlFor="file">File (PDF or photo, up to 10 MB)</label>
-              <input className="input" id="file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" required /></div>
+            <div><label className="label" htmlFor="file">File (photo of any size, or PDF up to 25 MB)</label>
+              <input className="input" id="file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" required /></div>
           </div>
         </ActionForm>
       </section>

@@ -1,4 +1,5 @@
 "use client";
+import { shrinkPhoto } from "@/lib/shrink";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useEffect, useRef, useState } from "react";
@@ -6,6 +7,9 @@ import { Fragment, useEffect, useRef, useState } from "react";
 type Turn = { role: "user" | "assistant"; text: string; files?: string[]; error?: boolean };
 
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
+/** What the picker offers. iPhone HEIC pictures are let in because they are turned into JPG before they are sent. */
+const PICK = `${ACCEPT},image/heic,image/heif,.heic,.heif`;
+const MAX_PDF = 20 * 1024 * 1024;
 
 /** The part of the browser's built-in speech recognition this box uses. Safari and Chrome ship it under a webkit prefix. */
 type Recognizer = {
@@ -66,6 +70,23 @@ export function AssistantBox({
   const [busy, setBusy] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const [preparing, setPreparing] = useState(false);
+  /** Takes picked or pasted files: photos are shrunk to JPG first, anything the assistant cannot take is named. */
+  async function addFiles(got: File[], pasted: boolean) {
+    setPreparing(true);
+    try {
+      const ready: File[] = [];
+      let refused = false;
+      for (const raw of got) {
+        const f = await shrinkPhoto(raw);
+        const heic = /^image\/hei[cf]/i.test(f.type) || /\.hei[cf]$/i.test(f.name);
+        if (!(ACCEPT.split(",").includes(f.type) || heic) || (f.type === "application/pdf" && f.size > MAX_PDF)) { refused = true; continue; }
+        ready.push(f);
+      }
+      setPasteNote(refused ? "Only photos and PDFs (up to 20 MB) can be attached here." : "");
+      if (ready.length) setFiles((old) => [...old, ...ready.map((f, i) => (pasted && (/^image\.\w+$/i.test(f.name) || !f.name) ? new File([f], `Pasted ${old.length + i + 1}.${f.type.split("/")[1].replace("jpeg", "jpg")}`, { type: f.type }) : f))].slice(0, 6));
+    } finally { setPreparing(false); }
+  }
   const [canSpeak, setCanSpeak] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceNote, setVoiceNote] = useState("");
@@ -103,7 +124,7 @@ export function AssistantBox({
 
   async function send(message = text) {
     const msg = message.trim();
-    if (busy || (!msg && !files.length)) return;
+    if (busy || preparing || (!msg && !files.length)) return;
     recognizer.current?.abort();
     const body = new FormData();
     body.set("text", msg);
@@ -177,9 +198,7 @@ export function AssistantBox({
             const got = [...e.clipboardData.files];
             if (!got.length) return;
             e.preventDefault();
-            const ok = got.filter((f) => ACCEPT.split(",").includes(f.type) && f.size <= 10 * 1024 * 1024);
-            setPasteNote(ok.length < got.length ? "Only PDFs and photos (JPG, PNG, WebP) up to 10 MB can be pasted." : "");
-            if (ok.length) setFiles((old) => [...old, ...ok.map((f, i) => new File([f], /^image\.\w+$/i.test(f.name) || !f.name ? `Pasted ${old.length + i + 1}.${f.type.split("/")[1].replace("jpeg", "jpg")}` : f.name, { type: f.type }))].slice(0, 6));
+            addFiles(got, true);
           }}
         />
         {files.length > 0 && <p className="text-xs text-muted">Attached: {files.map((f) => f.name).join(", ")} <button type="button" className="underline" onClick={() => { setFiles([]); if (picker.current) picker.current.value = ""; }}>Remove</button></p>}
@@ -187,16 +206,16 @@ export function AssistantBox({
         {listening && <p className="text-xs font-semibold text-red-700" role="status">Listening... speak now, then check the text before you send.</p>}
         {voiceNote && !listening && <p className="text-xs text-red-700" role="status">{voiceNote}</p>}
         <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-gold" disabled={busy || (!text.trim() && !files.length)}>{busy ? "Working..." : "Send"}</button>
+          <button className="btn-gold" disabled={busy || preparing || (!text.trim() && !files.length)}>{busy ? "Working..." : preparing ? "Preparing photo..." : "Send"}</button>
           {canSpeak && (
             <button type="button" className={listening ? "btn-quiet ring-2 ring-red-500" : "btn-quiet"} onClick={toggleVoice} disabled={busy} aria-pressed={listening}>
               {listening ? "Stop listening" : "Speak"}
             </button>
           )}
-          <input ref={picker} id="assistant-files" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(e) => setFiles([...(e.target.files ?? [])].slice(0, 6))} />
+          <input ref={picker} id="assistant-files" type="file" multiple accept={PICK} className="sr-only" onChange={(e) => { const got = [...(e.target.files ?? [])]; e.target.value = ""; setFiles([]); addFiles(got, false); }} />
           <label htmlFor="assistant-files" className="btn-quiet cursor-pointer">Attach<span className={page ? "hidden md:inline" : undefined}>&nbsp;license or registration</span></label>
           {!page && turns.length > 0 && <button type="button" className="btn-quiet" onClick={() => { setTurns([]); setChatId(null); }} disabled={busy}>New chat</button>}
-          <span className={page ? "hidden text-xs text-muted md:inline" : "text-xs text-muted"}>PDF or photo, up to 10 MB each. Always review what the assistant fills in.</span>
+          <span className={page ? "hidden text-xs text-muted md:inline" : "text-xs text-muted"}>Photos of any size, PDFs up to 20 MB. Always review what the assistant fills in.</span>
         </div>
       </form>
     </section>

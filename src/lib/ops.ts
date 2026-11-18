@@ -145,7 +145,7 @@ export type Upload = { name: string; type: string; data: Uint8Array<ArrayBuffer>
 /** Checks a file is one the hub accepts. Returns a message for the person if not. */
 export function uploadProblem(f: Upload): string | null {
   if (f.data.length === 0) return "That file is empty.";
-  if (f.data.length > MAX_DOC_BYTES) return "That file is over 10 MB. Take a smaller photo or compress the PDF.";
+  if (f.data.length > MAX_DOC_BYTES) return "That file is over 25 MB. Compress the PDF or split it in two.";
   if (!DOC_TYPES[f.type]) return "Only PDF, JPEG, PNG, WebP and HEIC files are accepted.";
   if (!sniffMatches(f.type, f.data)) return "That file does not look like a real PDF or image. Export it again and retry.";
   return null;

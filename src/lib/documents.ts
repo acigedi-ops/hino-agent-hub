@@ -10,7 +10,9 @@ export const OTHER_DOC_KINDS = ["Driver's license", "Registration", "Signed form
 export const DOC_KINDS: string[] = [...REQUIRED_DOCS, ...OTHER_DOC_KINDS];
 /** Which of the required documents a file is still missing, given the kinds it has. */
 export const missingDocs = (kinds: Iterable<string>) => { const have = new Set(kinds); return REQUIRED_DOCS.filter((k) => !have.has(k)); };
-export const MAX_DOC_BYTES = 10 * 1024 * 1024;
+export const MAX_DOC_BYTES = 25 * 1024 * 1024;
+/** What the assistant can be sent: the AI service takes a photo up to about 5 MB once encoded, and 32 MB for a whole message. */
+export const MAX_READ_IMAGE_BYTES = 3.7 * 1024 * 1024, MAX_READ_PDF_BYTES = 20 * 1024 * 1024;
 
 /** File types the hub accepts, keyed by MIME type. Anything else is refused. */
 export const DOC_TYPES: Record<string, string> = {

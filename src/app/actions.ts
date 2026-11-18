@@ -6,6 +6,7 @@ import type { Stage } from "@prisma/client";
 import { db } from "@/lib/db";
 import { contactScope, hashPassword, requireAdmin, requireUser, signIn, signOut, type SessionUser } from "@/lib/auth";
 import { SOURCE_KINDS, MANUAL_STAGES, parseDate, stageFromPolicies, stageLabel } from "@/lib/contacts";
+import { readUpload } from "@/lib/upload-read";
 import { createContactCore, findReferral, newSourceCode, logActivity, saveDocumentCore, saveIntakeCore, uploadProblem } from "@/lib/ops";
 import { lookupVin } from "@/lib/vin";
 import { pushDocuments, pushToEzlynx } from "@/lib/ezlynx-sync";
@@ -244,7 +245,7 @@ export async function uploadDocument(_: FormState, f: FormData): Promise<FormSta
   const c = await ownedContact(u, s(f, "contactId"));
   const file = f.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file first." };
-  const upload = { name: file.name, type: file.type, data: new Uint8Array(await file.arrayBuffer()) };
+  const upload = await readUpload(file);
   const problem = uploadProblem(upload);
   if (problem) return { error: problem };
   const doc = await saveDocumentCore(u, c.id, upload, s(f, "kind"));
@@ -268,7 +269,7 @@ export async function uploadAgentDocument(_: FormState, f: FormData): Promise<Fo
   const u = await requireUser();
   const file = f.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Choose a file first." };
-  const upload = { name: file.name, type: file.type, data: new Uint8Array(await file.arrayBuffer()) };
+  const upload = await readUpload(file);
   const problem = uploadProblem(upload);
   if (problem) return { error: problem };
   const kind = AGENT_DOC_KINDS.includes(s(f, "kind")) ? s(f, "kind") : "Other";

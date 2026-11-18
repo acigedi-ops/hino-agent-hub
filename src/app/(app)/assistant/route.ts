@@ -4,6 +4,8 @@ import { z } from "zod";
 import { currentUser } from "@/lib/auth";
 import { MAX_UPLOADS, assistantEnabled, runAssistant } from "@/lib/assistant";
 import { uploadProblem, type Upload } from "@/lib/ops";
+import { readUpload } from "@/lib/upload-read";
+import { MAX_READ_IMAGE_BYTES, MAX_READ_PDF_BYTES } from "@/lib/documents";
 import { CONTEXT_TURNS, getChat, saveExchange } from "@/lib/assistant-chats";
 
 export const maxDuration = 300;
@@ -40,8 +42,10 @@ export async function POST(req: Request) {
 
   const uploads: Upload[] = [];
   for (const f of files) {
-    const upload = { name: f.name, type: f.type, data: new Uint8Array(await f.arrayBuffer()) };
-    const problem = uploadProblem(upload);
+    const upload = await readUpload(f);
+    const problem = uploadProblem(upload)
+      ?? (upload.type === "application/pdf" && upload.data.length > MAX_READ_PDF_BYTES ? "PDFs sent to the assistant can be up to 20 MB. Upload it on the client's page instead." : null)
+      ?? (upload.type.startsWith("image/") && upload.type !== "image/heic" && upload.data.length > MAX_READ_IMAGE_BYTES ? "That photo is too large for the assistant to read. Send it from a phone, or save it as a smaller JPG first." : null);
     if (problem) return NextResponse.json({ error: `${f.name}: ${problem}` }, { status: 400 });
     uploads.push(upload);
   }

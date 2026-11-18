@@ -235,7 +235,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                     {files.map((d) => docRow(d))}
                     <ActionForm action={uploadDocument} submit={files.length ? "Add another" : "Upload"} className="space-y-2 border-t border-line pt-2" buttonClass="btn-quiet">
                       <input type="hidden" name="contactId" value={c.id} /><input type="hidden" name="kind" value={kind} />
-                      <input className="input" id={`req-file-${i}`} name="file" type="file" aria-label={`${kind} file`} accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" required />
+                      <input className="input" id={`req-file-${i}`} name="file" type="file" aria-label={`${kind} file`} accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" required />
                     </ActionForm>
                   </div>
                 );
@@ -251,8 +251,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
                 <input type="hidden" name="contactId" value={c.id} />
                 <div className="w-full md:w-auto"><label className="label" htmlFor="doc-kind">Type</label>
                   <select className="input" id="doc-kind" name="kind">{OTHER_DOC_KINDS.map((k) => <option key={k}>{k}</option>)}</select></div>
-                <div className="min-w-0 basis-full md:flex-1 md:basis-0"><label className="label" htmlFor="doc-file">File (PDF or photo, up to 10 MB)</label>
-                  <input className="input" id="doc-file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic" required /></div>
+                <div className="min-w-0 basis-full md:flex-1 md:basis-0"><label className="label" htmlFor="doc-file">File (photo of any size, or PDF up to 25 MB)</label>
+                  <input className="input" id="doc-file" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" required /></div>
               </ActionForm>
             </div>
           </section>

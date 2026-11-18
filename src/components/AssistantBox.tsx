@@ -8,6 +8,27 @@ type Turn = { role: "user" | "assistant"; text: string; files?: string[]; error?
 const IDEAS = ["What renews in the next 30 days?", "Find a client by name or phone", "Add a new applicant", "How does someone become a client?"];
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
+/** The part of the browser's built-in speech recognition this box uses. Safari and Chrome ship it under a webkit prefix. */
+type Recognizer = {
+  lang: string; continuous: boolean; interimResults: boolean;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start(): void; stop(): void; abort(): void;
+};
+type RecognizerCtor = new () => Recognizer;
+const recognizerCtor = () => {
+  const w = window as unknown as { SpeechRecognition?: RecognizerCtor; webkitSpeechRecognition?: RecognizerCtor };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition;
+};
+const VOICE_ERRORS: Record<string, string> = {
+  "not-allowed": "The microphone is blocked. Allow it for this site in your browser settings, then tap Speak again.",
+  "service-not-allowed": "Voice typing is turned off on this phone. On iPhone, turn on Dictation in Settings, General, Keyboard.",
+  "audio-capture": "No microphone was found.",
+  network: "Voice needs an internet connection. Try again.",
+  "no-speech": "I did not hear anything. Tap Speak and try again.",
+};
+
 /** Renders the small amount of formatting the assistant uses: links, bold and line breaks. Everything else stays plain text. */
 function Rich({ text }: { text: string }) {
   const parts = text.split(/(\[[^\]\n]+\]\((?:\/|https:\/\/)[^)\s]*\)|\*\*[^*\n]+\*\*)/g);
@@ -35,12 +56,45 @@ export function AssistantBox({ enabled, firstName }: { enabled: boolean; firstNa
   const [busy, setBusy] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLInputElement>(null);
+  const [canSpeak, setCanSpeak] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [voiceNote, setVoiceNote] = useState("");
+  const recognizer = useRef<Recognizer | null>(null);
+
+  // Checked after mount so the server and the browser render the same first page.
+  useEffect(() => {
+    setCanSpeak(Boolean(recognizerCtor()));
+    return () => recognizer.current?.abort();
+  }, []);
+
+  /** Starts or stops listening. Spoken words go into the message box after whatever is already typed; nothing is sent until the agent taps Send. */
+  function toggleVoice() {
+    if (listening) { recognizer.current?.stop(); return; }
+    const Ctor = recognizerCtor();
+    if (!Ctor) return;
+    const before = text.trim();
+    const rec = new Ctor();
+    rec.lang = navigator.language || "en-US";
+    // One phrase per tap: continuous mode repeats words on some Android phones.
+    rec.continuous = false;
+    rec.interimResults = true;
+    rec.onresult = (e) => {
+      const said = Array.from(e.results, (r) => r[0].transcript).join(" ").replace(/\s+/g, " ").trim();
+      setText([before, said].filter(Boolean).join(" "));
+    };
+    rec.onerror = (e) => { if (e.error !== "aborted") setVoiceNote(VOICE_ERRORS[e.error] ?? "Voice did not work this time. Try again or type your message."); };
+    rec.onend = () => { setListening(false); recognizer.current = null; };
+    recognizer.current = rec;
+    setVoiceNote("");
+    try { rec.start(); setListening(true); } catch { setVoiceNote("Voice did not start. Try again or type your message."); }
+  }
 
   useEffect(() => { log.current?.scrollTo({ top: log.current.scrollHeight }); }, [turns, busy]);
 
   async function send(message = text) {
     const msg = message.trim();
     if (busy || (!msg && !files.length)) return;
+    recognizer.current?.abort();
     const history = turns.filter((t) => !t.error).map(({ role, text }) => ({ role, text }));
     const body = new FormData();
     body.set("text", msg);
@@ -95,8 +149,15 @@ export function AssistantBox({ enabled, firstName }: { enabled: boolean; firstNa
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
         />
         {files.length > 0 && <p className="text-xs text-muted">Attached: {files.map((f) => f.name).join(", ")}</p>}
+        {listening && <p className="text-xs font-semibold text-red-700" role="status">Listening... speak now, then check the text before you send.</p>}
+        {voiceNote && !listening && <p className="text-xs text-red-700" role="status">{voiceNote}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <button className="btn-gold" disabled={busy || (!text.trim() && !files.length)}>{busy ? "Working..." : "Send"}</button>
+          {canSpeak && (
+            <button type="button" className={listening ? "btn-quiet ring-2 ring-red-500" : "btn-quiet"} onClick={toggleVoice} disabled={busy} aria-pressed={listening}>
+              {listening ? "Stop listening" : "Speak"}
+            </button>
+          )}
           <input ref={picker} id="assistant-files" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(e) => setFiles([...(e.target.files ?? [])].slice(0, 6))} />
           <label htmlFor="assistant-files" className="btn-quiet cursor-pointer">Attach license or registration</label>
           {turns.length > 0 && <button type="button" className="btn-quiet" onClick={() => setTurns([])} disabled={busy}>New chat</button>}

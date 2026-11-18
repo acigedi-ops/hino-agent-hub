@@ -26,7 +26,7 @@ export default async function SourcePage({ params }: { params: Promise<{ id: str
   return (
     <div className="max-w-4xl space-y-6">
       <div>
-        <Link href="/sources" className="text-sm underline">Back to referral sources</Link>
+        <Link href="/sources" className="inline-flex min-h-10 items-center text-sm underline md:min-h-0">Back to referral sources</Link>
         <h1 className="h1 mt-1">{src.name}</h1>
         <p className="text-sm text-muted">{[src.kind, src.contactName, src.phone, src.email, src.address].filter(Boolean).join(" · ")}</p>
         {src.notes && <p className="mt-1 whitespace-pre-wrap text-sm">{src.notes}</p>}

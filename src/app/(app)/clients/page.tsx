@@ -89,11 +89,14 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
             <option value="">All agents</option>{agents.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         )}
-        <input type="hidden" name="sort" value={sort} /><input type="hidden" name="dir" value={dir} />
+        <select className="input md:hidden" name="sort" defaultValue={sort} aria-label="Sort by">
+          <option value="name">Sort by name</option><option value="renewal">Sort by next renewal</option><option value="effective">Sort by effective date</option><option value="premium">Sort by premium</option><option value="status">Sort by status</option><option value="type">Sort by type</option>{u.role === "ADMIN" && <option value="agent">Sort by agent</option>}
+        </select>
+        <input type="hidden" name="dir" value={dir} />
         <button className="btn-quiet">Apply</button>
         <Link className="btn-quiet" href="/clients">Clear</Link>
       </form>
-      <p className="text-xs text-muted">Click a column heading to sort by it. Click again to reverse.</p>
+      <p className="hidden text-xs text-muted md:block">Click a column heading to sort by it. Click again to reverse.</p>
       <div className="card overflow-x-auto p-0">
         {rows.length === 0 ? <p className="p-4 text-sm text-muted">No clients match. A contact becomes a client when a bound policy is added.</p> : (
           <table className="w-full">

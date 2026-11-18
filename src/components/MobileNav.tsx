@@ -31,10 +31,10 @@ export function MobileNav({ nav, name, role, signOut }: { nav: NavItem[]; name: 
   const [open, setOpen] = useState(false);
   useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => { document.body.style.overflow = open ? "hidden" : ""; return () => { document.body.style.overflow = ""; }; }, [open]);
-  const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/")) || (href === "/pipeline" && path.startsWith("/contacts")) ;
+  const active = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(href + "/")) || (href === "/pipeline" && path === "/contacts/new");
   const unread = nav.find((n) => n.href === "/inbox")?.badge;
   const tabs = TABS.map((h) => nav.find((n) => n.href === h)!).filter(Boolean);
-  const inMenu = !open && !tabs.some((t) => active(t.href));
+  const inMenu = !open && !tabs.some((t) => active(t.href)) && nav.some((n) => active(n.href));
   return (
     <div className="md:hidden">
       <header className="flex items-center justify-between bg-ink px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] text-white">

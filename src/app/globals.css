@@ -64,3 +64,9 @@ body {
   main a.rounded-full { display: inline-flex; align-items: center; min-height: 2.5rem; }
   main summary { padding-block: 0.6rem; }
 }
+
+/* iPhone Safari gives date and month boxes their own width and centres the text, which pushes them out of their column. */
+@media (max-width: 767px) {
+  input[type="date"].input, input[type="month"].input { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; display: block; }
+  input[type="date"].input::-webkit-date-and-time-value, input[type="month"].input::-webkit-date-and-time-value { text-align: left; }
+}

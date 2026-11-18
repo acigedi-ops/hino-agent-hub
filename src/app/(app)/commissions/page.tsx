@@ -154,7 +154,7 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
                           <thead><tr className="border-b border-line">
                             {deduction ? <><th className="th">Item</th><th className="th">Description</th><th className="th">For</th></> : <>
                               <th className="th">Client</th><th className="th">Company</th><th className="th">Policy #</th><th className="th">Eff date</th><th className="th">Trans date</th>
-                              <th className="th">Line</th><th className="th">Type</th><th className="th">Premium</th></>}
+                              <th className="th">Type</th><th className="th">Premium</th></>}
                             {many && <th className="th">Statement</th>}
                             <th className="th">{deduction ? "Amount" : "Commission"}</th>
                           </tr></thead>
@@ -164,7 +164,7 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
                                 {deduction ? <><td className="td font-semibold">{l.company}</td><td className="td">{l.client}</td><td className="td">{l.line}</td></> : <>
                                   <td className="td font-semibold">{l.client}</td><td className="td">{l.company}</td><td className="td">{l.policyNumber}</td>
                                   <td className="td whitespace-nowrap">{l.effDate ? fmtDate(l.effDate) : ""}</td><td className="td whitespace-nowrap">{l.transDate ? fmtDate(l.transDate) : ""}</td>
-                                  <td className="td">{l.line}</td><td className="td">{l.type}</td><td className={`td ${tone(Number(l.premium ?? 0))}`}>{l.premium === null ? "" : fmtMoney(Number(l.premium))}</td></>}
+                                  <td className="td">{l.type}{l.line && <span className="block text-xs text-muted">{l.line}</span>}</td><td className={`td ${tone(Number(l.premium ?? 0))}`}>{l.premium === null ? "" : fmtMoney(Number(l.premium))}</td></>}
                                 {many && <td className="td whitespace-nowrap">{monthLabel(l.statement.month)}</td>}
                                 <td className={`td font-semibold ${tone(Number(l.amount))}`}>{fmtMoney(Number(l.amount))}</td>
                               </tr>

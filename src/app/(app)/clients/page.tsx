@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
-import { POLICY_LINES, fmtDate, fmtMoney } from "@/lib/contacts";
+import { POLICY_LINES, STAGES, fmtDate, fmtMoney } from "@/lib/contacts";
 import { REQUIRED_DOCS, missingDocs } from "@/lib/documents";
 import { StageBadge } from "@/components/StageBadge";
 import { sortClients, type ClientRow, type SortKey, SORT_KEYS } from "@/lib/clients";
@@ -16,6 +16,7 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
   const sort: SortKey = SORT_KEYS.includes(sp.sort as SortKey) ? (sp.sort as SortKey) : "name";
   const dir = sp.dir === "desc" ? "desc" : "asc";
   const agents = u.role === "ADMIN" ? await db.user.findMany({ orderBy: { name: "asc" } }) : [];
+  const byStage = await db.contact.groupBy({ by: ["stage"], where: contactScope(u), _count: true });
 
   const found = await db.contact.findMany({
     where: {
@@ -65,6 +66,14 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4">
       <h1 className="h1">{u.role === "ADMIN" ? "All clients" : "My clients"}</h1>
+      <div className="grid grid-cols-3 gap-2 md:grid-cols-5 md:gap-3">
+        {STAGES.map((s) => (
+          <Link key={s.key} href={s.key === "CLIENT" ? "/clients" : `/pipeline?stage=${s.key}`} className="card p-3 hover:border-gold-dark">
+            <div className="text-xl font-bold">{byStage.find((b) => b.stage === s.key)?._count ?? 0}</div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted">{s.label}</div>
+          </Link>
+        ))}
+      </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {[["Shown", rows.length], ["Active policies", rows.reduce((n, r) => n + r.policies, 0)], ["Premium in force", fmtMoney(rows.reduce((n, r) => n + r.premium, 0))], ["Files missing a document", incomplete]].map(([l, v]) => (
           <div key={l} className="card"><div className="text-xl font-bold">{v}</div><div className="text-xs font-semibold uppercase tracking-wide text-muted">{l}</div></div>

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { contactScope, requireUser } from "@/lib/auth";
-import { STAGES, daysUntil, fmtDate, fmtMoney } from "@/lib/contacts";
+import { daysUntil, fmtDate } from "@/lib/contacts";
 import { REQUIRED_AGENT_DOCS, docState, needsAction } from "@/lib/agent-docs";
 import { assistantEnabled } from "@/lib/assistant";
 import { unreadCount } from "@/lib/messages";
@@ -13,8 +13,7 @@ export default async function Home() {
   const u = await requireUser();
   const scope = contactScope(u);
   const soon = new Date(Date.now() + 90 * 864e5);
-  const [byStage, renewals, requotes, premium] = await Promise.all([
-    db.contact.groupBy({ by: ["stage"], where: scope, _count: true }),
+  const [renewals, requotes] = await Promise.all([
     db.policy.findMany({
       where: { status: "ACTIVE", expirationDate: { lte: soon }, contact: scope },
       include: { contact: { include: { agent: true } } }, orderBy: { expirationDate: "asc" }, take: 50,
@@ -23,7 +22,6 @@ export default async function Home() {
       where: { ...scope, stage: "LOST", requoteDate: { lte: new Date(Date.now() + 30 * 864e5) } },
       orderBy: { requoteDate: "asc" }, take: 20,
     }),
-    db.policy.aggregate({ where: { status: "ACTIVE", contact: scope }, _sum: { premium: true }, _count: true }),
   ]);
   const myDocs = u.role === "AGENT" ? await db.agentDocument.findMany({ where: { userId: u.id }, select: { kind: true, status: true, expiresOn: true, createdAt: true } }) : [];
   const docsToDo = u.role === "AGENT" ? REQUIRED_AGENT_DOCS.filter((k) => needsAction(docState(myDocs, k))) : [];
@@ -39,7 +37,6 @@ export default async function Home() {
     }),
     db.task.count({ where: dueWhere }),
   ]);
-  const count = (k: string) => byStage.find((b) => b.stage === k)?._count ?? 0;
 
   return (
     <div className="space-y-6">
@@ -76,21 +73,6 @@ export default async function Home() {
       </section>
 
       <AssistantBox enabled={assistantEnabled()} firstName={u.name.split(" ")[0]} />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {STAGES.map((s) => (
-          <Link key={s.key} href={s.key === "CLIENT" ? "/clients" : `/pipeline?stage=${s.key}`} className="card hover:border-gold-dark">
-            <div className="text-2xl font-bold">{count(s.key)}</div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-muted">{s.label}</div>
-          </Link>
-        ))}
-      </div>
-
-      <div className="card">
-        <div className="text-sm text-muted">Premium in force{u.role === "ADMIN" ? " (all agents)" : ""}</div>
-        <div className="text-2xl font-bold">{fmtMoney(Number(premium._sum.premium ?? 0))}</div>
-        <div className="text-xs text-muted">{premium._count} active {premium._count === 1 ? "policy" : "policies"}</div>
-      </div>
 
       <section className="space-y-2">
         <h2 className="h2">Renewals in the next 90 days</h2>

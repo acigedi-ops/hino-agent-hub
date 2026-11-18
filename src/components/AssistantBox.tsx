@@ -195,7 +195,10 @@ export function AssistantBox({
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           onPaste={(e) => {
             // A copied photo or PDF is attached; copied text is left to paste as usual.
-            const got = [...e.clipboardData.files];
+            // Some apps put a picture of the text on the clipboard next to the text itself (a phone number from Contacts,
+            // a line from Notes or Word). When there is text, the text wins and nothing is attached.
+            if (e.clipboardData.getData("text/plain").trim()) return;
+            const got = [...e.clipboardData.files].filter((f) => f.type === "application/pdf" || f.type.startsWith("image/") || /\.(hei[cf]|pdf)$/i.test(f.name));
             if (!got.length) return;
             e.preventDefault();
             addFiles(got, true);

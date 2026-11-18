@@ -62,6 +62,7 @@ export function AssistantBox({
   const [turns, setTurns] = useState<Turn[]>(initialTurns);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [pasteNote, setPasteNote] = useState("");
   const [busy, setBusy] = useState(false);
   const log = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLInputElement>(null);
@@ -169,10 +170,20 @@ export function AssistantBox({
       <form className={page ? "mx-auto w-full max-w-3xl space-y-2" : "space-y-2"} onSubmit={(e) => { e.preventDefault(); send(); }}>
         <textarea
           className="input" rows={page ? 2 : 5} value={text} onChange={(e) => setText(e.target.value)} aria-label="Message to the assistant"
-          placeholder="Ask a question, or attach a license or registration..."
+          placeholder="Ask a question, or attach or paste a license or registration..."
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          onPaste={(e) => {
+            // A copied photo or PDF is attached; copied text is left to paste as usual.
+            const got = [...e.clipboardData.files];
+            if (!got.length) return;
+            e.preventDefault();
+            const ok = got.filter((f) => ACCEPT.split(",").includes(f.type) && f.size <= 10 * 1024 * 1024);
+            setPasteNote(ok.length < got.length ? "Only PDFs and photos (JPG, PNG, WebP) up to 10 MB can be pasted." : "");
+            if (ok.length) setFiles((old) => [...old, ...ok.map((f, i) => new File([f], /^image\.\w+$/i.test(f.name) || !f.name ? `Pasted ${old.length + i + 1}.${f.type.split("/")[1].replace("jpeg", "jpg")}` : f.name, { type: f.type }))].slice(0, 6));
+          }}
         />
-        {files.length > 0 && <p className="text-xs text-muted">Attached: {files.map((f) => f.name).join(", ")}</p>}
+        {files.length > 0 && <p className="text-xs text-muted">Attached: {files.map((f) => f.name).join(", ")} <button type="button" className="underline" onClick={() => { setFiles([]); if (picker.current) picker.current.value = ""; }}>Remove</button></p>}
+        {pasteNote && <p className="text-xs text-red-700" role="status">{pasteNote}</p>}
         {listening && <p className="text-xs font-semibold text-red-700" role="status">Listening... speak now, then check the text before you send.</p>}
         {voiceNote && !listening && <p className="text-xs text-red-700" role="status">{voiceNote}</p>}
         <div className="flex flex-wrap items-center gap-2">

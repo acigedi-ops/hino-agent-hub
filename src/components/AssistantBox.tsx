@@ -5,7 +5,6 @@ import { Fragment, useEffect, useRef, useState } from "react";
 
 type Turn = { role: "user" | "assistant"; text: string; files?: string[]; error?: boolean };
 
-const IDEAS = ["What renews in the next 30 days?", "Find a client by name or phone", "Add a new applicant", "How does someone become a client?"];
 const ACCEPT = "application/pdf,image/jpeg,image/png,image/webp";
 
 /** The part of the browser's built-in speech recognition this box uses. Safari and Chrome ship it under a webkit prefix. */
@@ -48,9 +47,19 @@ function Rich({ text }: { text: string }) {
   );
 }
 
-export function AssistantBox({ enabled, firstName }: { enabled: boolean; firstName: string }) {
+/**
+ * The assistant chat. "home" is the card on the Home page; "page" fills the AI Assistant page and can open on a saved chat.
+ * Every exchange is saved by the hub, so a chat started on Home shows up in the AI Assistant page's list.
+ */
+export function AssistantBox({
+  enabled, firstName, variant = "home", chatId: openChatId = null, initialTurns = [],
+}: {
+  enabled: boolean; firstName: string; variant?: "home" | "page"; chatId?: string | null; initialTurns?: { role: "user" | "assistant"; text: string }[];
+}) {
   const router = useRouter();
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const page = variant === "page";
+  const [chatId, setChatId] = useState<string | null>(openChatId);
+  const [turns, setTurns] = useState<Turn[]>(initialTurns);
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -95,10 +104,9 @@ export function AssistantBox({ enabled, firstName }: { enabled: boolean; firstNa
     const msg = message.trim();
     if (busy || (!msg && !files.length)) return;
     recognizer.current?.abort();
-    const history = turns.filter((t) => !t.error).map(({ role, text }) => ({ role, text }));
     const body = new FormData();
     body.set("text", msg);
-    body.set("history", JSON.stringify(history));
+    if (chatId) body.set("chatId", chatId);
     files.forEach((f) => body.append("files", f));
     const shown = msg || "Please handle the attached files.";
     setTurns((t) => [...t, { role: "user", text: files.length ? `${shown}\n(Attached: ${files.map((f) => f.name).join(", ")})` : shown, files: files.map((f) => f.name) }]);
@@ -106,45 +114,61 @@ export function AssistantBox({ enabled, firstName }: { enabled: boolean; firstNa
     if (picker.current) picker.current.value = "";
     try {
       const res = await fetch("/assistant", { method: "POST", body });
-      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string };
-      if (data.reply) { setTurns((t) => [...t, { role: "assistant", text: data.reply! }]); router.refresh(); }
+      const data = (await res.json().catch(() => ({}))) as { reply?: string; error?: string; chatId?: string };
+      if (data.reply) {
+        setTurns((t) => [...t, { role: "assistant", text: data.reply! }]);
+        if (data.chatId) setChatId(data.chatId);
+        // On the page, a brand new chat moves to its own address so it can be reopened and shows in the list.
+        if (page && data.chatId && data.chatId !== chatId) router.replace(`/ai-assistant/${data.chatId}`);
+        else router.refresh();
+      }
       else setTurns((t) => [...t, { role: "assistant", text: data.error ?? "Something went wrong. Try again.", error: true }]);
     } catch {
       setTurns((t) => [...t, { role: "assistant", text: "The hub could not be reached. Check your connection and try again.", error: true }]);
     } finally { setBusy(false); }
   }
 
+  const bubble = "max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-base md:text-sm";
   return (
-    <section className="card space-y-3" aria-label="Assistant">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="h2">Ask the assistant</h2>
-        {!enabled && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">Not connected yet</span>}
-      </div>
-      {turns.length === 0 ? (
-        <div className="space-y-2">
-          <p className="text-sm text-muted">
-            Hi {firstName}. Ask about your clients and applicants, add a new applicant, or attach a driver&apos;s license or registration and I will fill the intake form and file it under the right person.
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {IDEAS.map((q) => <button key={q} type="button" className="btn-quiet text-xs" onClick={() => send(q)} disabled={busy}>{q}</button>)}
+    <section className={page ? "flex h-full min-h-0 flex-col gap-3" : "card space-y-3"} aria-label="Assistant">
+      {!page && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="h2">Ask the assistant</h2>
+          <div className="flex items-center gap-2">
+            {!enabled && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">Not connected yet</span>}
+            <Link href={chatId ? `/ai-assistant/${chatId}` : "/ai-assistant"} className="btn-quiet">Open</Link>
           </div>
         </div>
+      )}
+      {turns.length === 0 ? (
+        page ? (
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
+            <p className="text-2xl font-bold">Hi {firstName}. How can I help?</p>
+            <p className="max-w-md text-sm text-muted">Ask about your clients and applicants, add a new applicant, or attach a driver&apos;s license or registration and I will fill the intake form.</p>
+            {!enabled && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">Not connected yet</span>}
+          </div>
+        ) : (
+          <p className="text-base text-muted md:text-sm">
+            Hi {firstName}. Ask about your clients and applicants, add a new applicant, or attach a driver&apos;s license or registration and I will fill the intake form and file it under the right person.
+          </p>
+        )
       ) : (
-        <div ref={log} className="max-h-96 space-y-3 overflow-y-auto pr-1" aria-live="polite">
-          {turns.map((t, i) => (
-            <div key={i} className={t.role === "user" ? "flex justify-end" : "flex justify-start"}>
-              <div className={`max-w-[85%] whitespace-pre-wrap break-words rounded-lg px-3 py-2 text-sm ${
-                t.role === "user" ? "bg-ink text-white" : t.error ? "bg-red-50 text-red-800" : "bg-paper"}`}>
-                {t.role === "assistant" && !t.error ? <Rich text={t.text} /> : t.text}
+        <div ref={log} className={`overflow-y-auto pr-1 ${page ? "min-h-0 flex-1" : "max-h-[60vh] md:max-h-[34rem]"}`} aria-live="polite">
+          <div className={page ? "mx-auto max-w-3xl space-y-4 py-2" : "space-y-3"}>
+            {turns.map((t, i) => (
+              <div key={i} className={t.role === "user" ? "flex justify-end" : "flex justify-start"}>
+                <div className={`${bubble} ${t.role === "user" ? "bg-ink text-white" : t.error ? "bg-red-50 text-red-800" : "bg-paper"}`}>
+                  {t.role === "assistant" && !t.error ? <Rich text={t.text} /> : t.text}
+                </div>
               </div>
-            </div>
-          ))}
-          {busy && <p className="text-sm text-muted">Working on it...</p>}
+            ))}
+            {busy && <p className="text-sm text-muted">Working on it...</p>}
+          </div>
         </div>
       )}
-      <form className="space-y-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
+      <form className={page ? "mx-auto w-full max-w-3xl space-y-2" : "space-y-2"} onSubmit={(e) => { e.preventDefault(); send(); }}>
         <textarea
-          className="input" rows={2} value={text} onChange={(e) => setText(e.target.value)} aria-label="Message to the assistant"
+          className="input" rows={page ? 2 : 3} value={text} onChange={(e) => setText(e.target.value)} aria-label="Message to the assistant"
           placeholder="Ask a question, or attach a license or registration..."
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
         />
@@ -159,9 +183,9 @@ export function AssistantBox({ enabled, firstName }: { enabled: boolean; firstNa
             </button>
           )}
           <input ref={picker} id="assistant-files" type="file" multiple accept={ACCEPT} className="sr-only" onChange={(e) => setFiles([...(e.target.files ?? [])].slice(0, 6))} />
-          <label htmlFor="assistant-files" className="btn-quiet cursor-pointer">Attach license or registration</label>
-          {turns.length > 0 && <button type="button" className="btn-quiet" onClick={() => setTurns([])} disabled={busy}>New chat</button>}
-          <span className="text-xs text-muted">PDF or photo, up to 10 MB each. Always review what the assistant fills in.</span>
+          <label htmlFor="assistant-files" className="btn-quiet cursor-pointer">Attach<span className={page ? "hidden md:inline" : undefined}>&nbsp;license or registration</span></label>
+          {!page && turns.length > 0 && <button type="button" className="btn-quiet" onClick={() => { setTurns([]); setChatId(null); }} disabled={busy}>New chat</button>}
+          <span className={page ? "hidden text-xs text-muted md:inline" : "text-xs text-muted"}>PDF or photo, up to 10 MB each. Always review what the assistant fills in.</span>
         </div>
       </form>
     </section>

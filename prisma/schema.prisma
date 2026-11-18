@@ -55,6 +55,7 @@ model User {
   feesEarned        AgencyFee[] @relation("FeeAgent")
   feesCreated       AgencyFee[] @relation("FeeCreator")
   tasksCreated      Task[] @relation("TaskCreator")
+  assistantChats    AssistantChat[]
 }
 
 model Session {
@@ -347,4 +348,32 @@ model AgencyFee {
   @@index([agentId, createdAt])
   @@index([contactId])
   @@index([status])
+}
+
+/// One saved conversation between a person and the hub's AI assistant. Only its owner can see it.
+model AssistantChat {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Starts as the first question, shortened. The owner can rename it.
+  title     String
+  createdAt DateTime @default(now())
+  /// Time of the newest message, for sorting the chat list.
+  lastAt    DateTime @default(now())
+  turns     AssistantTurn[]
+
+  @@index([userId, lastAt])
+}
+
+/// One message in a saved assistant chat. Uploaded files are not kept here, only their names in the text.
+model AssistantTurn {
+  id        String        @id @default(cuid())
+  chatId    String
+  chat      AssistantChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  /// "user" or "assistant"
+  role      String
+  text      String
+  createdAt DateTime      @default(now())
+
+  @@index([chatId, createdAt])
 }

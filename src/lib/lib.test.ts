@@ -199,3 +199,14 @@ test("city, state and zip print after Address 2 on the PDF", async () => {
   const out = await PDFDocument.load(await fillIntakePdf(readFileSync("public/forms/rhino-intake-template.pdf"), d));
   assert.equal(out.getForm().getTextField("address2").getText(), "Apt 2, Tacoma, WA 98402");
 });
+
+test("a sold EZLynx opportunity is read, anything else is ignored", async () => {
+  const { readSold } = await import("./sold");
+  const base = { opportunity_id: "77", first_name: "Sample", last_name: "Buyer", cell_phone: "206-555-0199", email: "Buyer@Example.com", lob: "AUTOP", carrier: "", premium: "0" };
+  assert.equal(readSold({ ...base, status: "New", sales_status: "Submitted" }), null);
+  assert.equal(readSold({ ...base, status: "Open", sales_status: "Not Sold" }), null);
+  assert.deepEqual(readSold({ ...base, status: "Open", sales_status: "Quoted,Sold", lob: "HOME,AUTOP", carrier: ",Sample Carrier", premium: "0,1200.50" }),
+    { ref: "77", name: "Sample Buyer", phones: ["2065550199"], emails: ["buyer@example.com"], carrier: "Sample Carrier", line: "Personal Auto", premium: 1200.5 });
+  assert.equal(readSold({ ...base, status: "Won", sales_status: "", premium: "900" })?.premium, 900);
+  assert.equal(readSold({ status: "Sold" }), null);
+});

@@ -98,7 +98,8 @@ export async function runReport(u: SessionUser, input: string | string[][], appl
       const wasClient = match.stage === "CLIENT";
       if (apply) {
         const p = await db.policy.create({ data: { contactId: match.id, ...policyData(r) } });
-        await db.contact.update({ where: { id: match.id }, data: { stage: "CLIENT", lostReason: null, requoteDate: null } });
+        await db.contact.update({ where: { id: match.id }, data: { stage: "CLIENT", lostReason: null, requoteDate: null, soldAt: null } });
+        await db.task.updateMany({ where: { contactId: match.id, kind: "sold_check", doneAt: null }, data: { doneAt: new Date(), doneNote: "Policy arrived on the policy report" } });
         await db.activity.create({ data: { contactId: match.id, userId: u.id, kind: "policy", text: `Policy report: ${r.carrier} ${r.policyNumber} added${wasClient ? "" : ". Now a client"}` } });
         byPolicy.set(key, { id: p.id, policyNumber: p.policyNumber, contactId: match.id });
       } else byPolicy.set(key, { id: `new-${r.line}`, policyNumber: r.policyNumber, contactId: match.id });

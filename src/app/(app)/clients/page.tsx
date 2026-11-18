@@ -46,8 +46,9 @@ export default async function Clients({ searchParams }: { searchParams: Promise<
     const shown = active.length ? active : c.policies;
     return {
       id: c.id, name: c.fullName, type: c.type, stage: c.stage, phone: c.phone ?? "", agent: c.agent.name, mine: c.agentId === u.id,
-      carriers: [...new Set(shown.map((p) => p.carrier))].join(", "),
-      premium: active.reduce((m, p) => m + Number(p.premium), 0),
+      // Sold in EZLynx, policy not on a report yet: show what the sale said.
+      carriers: c.policies.length ? [...new Set(shown.map((p) => p.carrier))].join(", ") : [c.soldCarrier, c.soldAt ? "(details pending)" : ""].filter(Boolean).join(" "),
+      premium: c.policies.length ? active.reduce((m, p) => m + Number(p.premium), 0) : Number(c.soldPremium ?? 0),
       policies: active.length,
       effective: shown.length ? new Date(Math.max(...shown.map((p) => p.effectiveDate.getTime()))) : null,
       renewal: active.length ? active[0].expirationDate : null,

@@ -80,7 +80,7 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
             <h2 className="h2">Stage</h2>
             <div className="card space-y-3">
               {isClient ? (
-                <p className="text-sm text-muted">This contact is a client because a policy from the EZLynx report is on file. They become a former client automatically when the last policy ends.</p>
+                <p className="text-sm text-muted">This contact is a client because their policy was sold in EZLynx or is on the policy report. They become a former client automatically when the last policy ends.</p>
               ) : (
                 c.stage === "LOST" ? (
                   <div className="space-y-2">
@@ -123,7 +123,8 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
           <section className="space-y-2">
             <h2 className="h2">Policies</h2>
             <div className="card space-y-3">
-              {c.policies.length === 0 && <p className="text-sm text-muted">No policies yet. This applicant becomes a client when their policy shows up on the EZLynx new business report the owner uploads.</p>}
+              {c.policies.length === 0 && c.soldAt && <p className="text-sm"><span className="font-semibold">Sold in EZLynx on {fmtDate(c.soldAt)}{[c.soldCarrier, c.soldLine, c.soldPremium ? fmtMoney(Number(c.soldPremium)) : ""].filter(Boolean).length ? `: ${[c.soldCarrier, c.soldLine, c.soldPremium ? fmtMoney(Number(c.soldPremium)) : ""].filter(Boolean).join(", ")}` : ""}.</span> <span className="text-muted">Details pending: the policy number and dates come with the next policy report.</span></p>}
+              {c.policies.length === 0 && !c.soldAt && <p className="text-sm text-muted">No policies yet. This applicant becomes a client when their policy shows up on the EZLynx new business report the owner uploads.</p>}
               {c.policies.map((p) => (
                 <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2 last:border-0 last:pb-0">
                   <div className="text-sm">

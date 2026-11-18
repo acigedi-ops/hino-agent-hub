@@ -3,11 +3,12 @@ import { db } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { fmtDate } from "@/lib/contacts";
 
-export const TASK_KINDS = { manual: "Follow-up", requote: "Requote", renewal: "Renewal", cancel_notice: "Cancel notice", cancelled: "Cancelled" } as const;
+export const TASK_KINDS = { manual: "Follow-up", requote: "Requote", renewal: "Renewal", cancel_notice: "Cancel notice", cancelled: "Cancelled", sold_check: "Check policy" } as const;
 export type TaskKind = keyof typeof TASK_KINDS;
 /** The renewal and cancellation work list. */
 export const RETENTION_KINDS: TaskKind[] = ["renewal", "cancel_notice", "cancelled"];
 export const RENEWAL_WINDOW_DAYS = 30;
+export const SOLD_CHECK_DAYS = 5;
 
 const DAY = 864e5;
 /** Today's calendar date in the office's time zone, as a UTC midnight like the date columns. */
@@ -30,12 +31,15 @@ export async function syncAutoTasks(force = false) {
   if (!force && Date.now() - lastSync < 5 * 60 * 1000) return;
   lastSync = Date.now();
   const t = today();
-  const [policies, requotes] = await Promise.all([
+  const [policies, requotes, soldWaiting, owner] = await Promise.all([
     db.policy.findMany({
       where: { status: "ACTIVE", expirationDate: { gte: addDays(t, -RENEWAL_WINDOW_DAYS), lte: addDays(t, RENEWAL_WINDOW_DAYS) } },
       select: { id: true, carrier: true, policyNumber: true, expirationDate: true, contactId: true, contact: { select: { fullName: true, agentId: true } } },
     }),
     db.contact.findMany({ where: { stage: "LOST", requoteDate: { not: null, lte: addDays(t, RENEWAL_WINDOW_DAYS) } }, select: { id: true, fullName: true, agentId: true, requoteDate: true, lostReason: true } }),
+    // Sold in EZLynx but still not on a policy report after five days.
+    db.contact.findMany({ where: { soldAt: { lte: new Date(Date.now() - SOLD_CHECK_DAYS * DAY) }, policies: { none: {} } }, select: { id: true, fullName: true, soldCarrier: true } }),
+    db.user.findFirst({ where: { role: "ADMIN", active: true }, orderBy: { createdAt: "asc" }, select: { id: true } }),
   ]);
   const data = [
     ...policies.map((p) => ({
@@ -48,6 +52,10 @@ export async function syncAutoTasks(force = false) {
       kind: "requote", autoKey: `requote:${c.id}:${iso(c.requoteDate!)}`, assigneeId: c.agentId, contactId: c.id, policyId: null,
       title: `Requote ${c.fullName}${c.lostReason ? ` (lost: ${c.lostReason})` : ""}`, dueOn: c.requoteDate!,
     })),
+    ...(owner ? soldWaiting.map((c) => ({
+      kind: "sold_check", autoKey: `sold:${c.id}`, assigneeId: owner.id, contactId: c.id, policyId: null,
+      title: `${c.fullName} was sold in EZLynx${c.soldCarrier ? ` (${c.soldCarrier})` : ""} but is not on a policy report yet. Check the policy`, dueOn: t,
+    })) : []),
   ];
   if (data.length) await db.task.createMany({ data, skipDuplicates: true });
 }

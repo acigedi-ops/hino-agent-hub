@@ -209,4 +209,10 @@ test("a sold EZLynx opportunity is read, anything else is ignored", async () => 
     { ref: "77", name: "Sample Buyer", phones: ["2065550199"], emails: ["buyer@example.com"], carrier: "Sample Carrier", line: "Personal Auto", premium: 1200.5 });
   assert.equal(readSold({ ...base, status: "Won", sales_status: "", premium: "900" })?.premium, 900);
   assert.equal(readSold({ status: "Sold" }), null);
+  // The shape EZLynx itself gives Zapier.
+  const raw = { opportunityId: 88, status: "New", name: "Sample Buyer", primaryContact: { firstName: "Sample", lastName: "Buyer", cellPhone: "206-555-0199", email: "" }, lobs: [{ lobCode: "AUTOP", salesStatus: "Submitted", finalizedPremium: 0, finalizedMasterCompany: "" }] };
+  assert.equal(readSold(raw), null);
+  assert.deepEqual(readSold({ ...raw, lobs: [{ lobCode: "AUTOP", salesStatus: "Sold", finalizedPremium: 1884.57, finalizedMasterCompany: "Sample Carrier" }] }),
+    { ref: "88", name: "Sample Buyer", phones: ["2065550199"], emails: [], carrier: "Sample Carrier", line: "Personal Auto", premium: 1884.57 });
+  assert.equal(readSold({ opportunityId: 89, status: "Sold", "primaryContact__firstName": "Sample", "primaryContact__lastName": "Buyer", "lobs[]finalizedPremium": "700" })?.premium, 700);
 });

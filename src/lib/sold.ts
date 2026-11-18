@@ -8,13 +8,33 @@ export type Sold = { ref: string; name: string; phones: string[]; emails: string
 const LOB: Record<string, string> = { AUTOP: "Personal Auto", AUTOB: "Commercial Auto", HOME: "Homeowners", HOMEP: "Homeowners" };
 const str = (v: unknown) => (v == null ? "" : String(v)).trim();
 /** Zapier sends a list (one entry per line of business) as one comma separated text. */
+const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {});
+
+/**
+ * Zapier may send the opportunity just as EZLynx gives it (primaryContact, lobs, opportunityId), with the nested parts
+ * either as objects or as keys joined by "__". Both are turned into the plain names used below.
+ */
+function flatten(raw: SoldInput): SoldInput {
+  if (raw.sales_status !== undefined || raw.first_name !== undefined) return raw;
+  const pc = { ...obj(raw.primaryContact) };
+  for (const [k, v] of Object.entries(raw)) if (k.startsWith("primaryContact__")) pc[k.slice(16)] = v;
+  const lobs = Array.isArray(raw.lobs) ? raw.lobs.map(obj) : [];
+  const col = (k: string) => (lobs.length ? lobs.map((l) => str(l[k])) : raw[`lobs[]${k}`]);
+  return {
+    opportunity_id: raw.opportunityId ?? raw.id, status: raw.status, name: raw.name,
+    first_name: pc.firstName, last_name: pc.lastName, cell_phone: pc.cellPhone, home_phone: pc.homePhone, work_phone: pc.workPhone, email: pc.email, alternate_email: pc.alternateEmail,
+    sales_status: col("salesStatus"), carrier: col("finalizedMasterCompany"), premium: col("finalizedPremium"), lob: col("lobCode"),
+  };
+}
+
 const list = (v: unknown) => (Array.isArray(v) ? v.map(str) : str(v).split(",").map((x) => x.trim()));
 
 /**
  * Reads what Zapier sends for a changed EZLynx opportunity. Returns null unless it says sold: the opportunity status or
  * one of its lines reads sold, won, bound or issued. The first sold line gives the carrier and premium.
  */
-export function readSold(b: SoldInput): Sold | null {
+export function readSold(raw: SoldInput): Sold | null {
+  const b = flatten(raw);
   const isSold = (s: string) => /\b(sold|won|bound|issued)\b/i.test(s) && !/\b(not|un)\s*-?\s*(sold|won)/i.test(s);
   const statuses = list(b.sales_status), carriers = list(b.carrier), premiums = list(b.premium), lobs = list(b.lob);
   let i = statuses.findIndex(isSold);

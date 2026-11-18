@@ -13,7 +13,7 @@ const sum = (ns: number[]) => Math.round(ns.reduce((a, n) => a + n, 0) * 100) / 
 const tone = (n: number) => (n < 0 ? "text-red-700" : "");
 const SORTS = [
   { key: "client", label: "Client" }, { key: "company", label: "Company" }, { key: "policy", label: "Policy #" }, { key: "eff", label: "Eff date" },
-  { key: "trans", label: "Trans date" }, { key: "type", label: "Type" }, { key: "premium", label: "Premium" }, { key: "commission", label: "Commission" },
+  { key: "type", label: "Type" }, { key: "premium", label: "Premium" }, { key: "commission", label: "Commission" },
 ] as const;
 type SortKey = (typeof SORTS)[number]["key"];
 
@@ -51,7 +51,7 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
   const dir = sp.dir === "desc" ? -1 : 1;
   if (sort) {
     const val = (l: (typeof lines)[number]): string | number | null => ({
-      client: l.client.toLowerCase(), company: l.company.toLowerCase(), policy: l.policyNumber.toLowerCase(), eff: l.effDate?.getTime() ?? null, trans: l.transDate?.getTime() ?? null,
+      client: l.client.toLowerCase(), company: l.company.toLowerCase(), policy: l.policyNumber.toLowerCase(), eff: l.effDate?.getTime() ?? null,
       type: l.type.toLowerCase(), premium: l.premium === null ? null : Number(l.premium), commission: Number(l.amount),
     })[sort];
     lines.sort((a, b) => {
@@ -123,7 +123,7 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
                 </form>
               )}
             </div>
-            {view === "week" && <p className="text-xs text-muted">A week shows the lines dated in that week (transaction date, or effective date when there is none). Monthly deductions are not included.</p>}
+            {view === "week" && <p className="text-xs text-muted">A week shows the lines dated in that week. Monthly deductions are not included.</p>}
           </div>
 
           {lines.length === 0 ? (
@@ -192,7 +192,7 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
                         <table className="w-full">
                           <thead><tr className="border-b border-line">
                             {deduction ? <><th className="th">Item</th><th className="th">Description</th><th className="th">For</th></> : <>
-                              {(["client", "company", "policy", "eff", "trans", "type", "premium"] as const).map(head)}</>}
+                              {(["client", "company", "policy", "eff", "type", "premium"] as const).map(head)}</>}
                             {many && <th className="th">Statement</th>}
                             {deduction ? <th className="th">Amount</th> : head("commission")}
                           </tr></thead>
@@ -201,7 +201,7 @@ export default async function Commissions({ searchParams }: { searchParams: Prom
                               <tr key={l.id} className="border-b border-line last:border-0">
                                 {deduction ? <><td className="td font-semibold">{l.company}</td><td className="td">{l.client}</td><td className="td">{l.line}</td></> : <>
                                   <td className="td font-semibold">{l.client}</td><td className="td">{l.company}</td><td className="td">{l.policyNumber}</td>
-                                  <td className="td whitespace-nowrap">{l.effDate ? fmtDate(l.effDate) : ""}</td><td className="td whitespace-nowrap">{l.transDate ? fmtDate(l.transDate) : ""}</td>
+                                  <td className="td whitespace-nowrap">{l.effDate ? fmtDate(l.effDate) : ""}</td>
                                   <td className="td">{l.type}{l.line && <span className="block text-xs text-muted">{l.line}</span>}</td><td className={`td ${tone(Number(l.premium ?? 0))}`}>{l.premium === null ? "" : fmtMoney(Number(l.premium))}</td></>}
                                 {many && <td className="td whitespace-nowrap">{monthLabel(l.statement.month)}</td>}
                                 <td className={`td font-semibold ${tone(Number(l.amount))}`}>{fmtMoney(Number(l.amount))}</td>
